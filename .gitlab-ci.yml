@@ -1,3 +1,8 @@
+stages:
+  - build
+  - format
+  - test
+
 check-compilation:
   stage: build
   script:
