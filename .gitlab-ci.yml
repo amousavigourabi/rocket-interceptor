@@ -13,6 +13,7 @@ check-compilation:
 check-formatting:
   stage: format
   script:
+    - rustup component add rustfmt
     - cargo fmt --check
 
 tests:
