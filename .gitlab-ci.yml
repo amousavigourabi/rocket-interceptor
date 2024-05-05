@@ -5,7 +5,7 @@ stages:
   - format
   - test
 
-check-compilation:
+build:
   stage: build
   script:
     - cargo build
