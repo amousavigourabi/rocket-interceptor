@@ -1,8 +1,11 @@
 image: rust:slim
 
+variables:
+  RUSTFLAGS: "-Dwarnings"
+
 stages:
   - build
-  - format
+  - lint
   - test
 
 build:
@@ -10,11 +13,17 @@ build:
   script:
     - cargo build
 
-check-formatting:
-  stage: format
+format-check:
+  stage: lint
   script:
     - rustup component add rustfmt
     - cargo fmt --check
+
+clippy-check:
+  stage: lint
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets --all-features
 
 tests:
   stage: test
