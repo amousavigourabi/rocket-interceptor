@@ -5,7 +5,7 @@ variables:
 
 stages:
   - build
-  - lint
+  - static-analysis
   - test
   - docs
 
@@ -15,24 +15,34 @@ build:
     - cargo build
 
 format-check:
-  stage: lint
+  stage: static-analysis
+  needs: ["build"]
   script:
     - rustup component add rustfmt
     - cargo fmt --check
 
 clippy-check:
-  stage: lint
+  stage: static-analysis
+  needs: ["build"]
   script:
     - rustup component add clippy
     - cargo clippy --all-targets --all-features
 
 tests:
   stage: test
+  needs: ["build"]
   script:
-    - cargo test
+    - curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    - cargo nextest run --profile ci
+    - mv target/nextest/ci/junit.xml .
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
 
 docs:
   stage: docs
+  needs: ["build", "format-check", "clippy-check", "tests"]
   script:
     - cargo doc
     - mv target/doc public
