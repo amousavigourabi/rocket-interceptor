@@ -1,0 +1,55 @@
+image: rust:slim
+
+variables:
+  RUSTFLAGS: "-Dwarnings"
+
+stages:
+  - build
+  - static-analysis
+  - test
+  - docs
+
+build:
+  stage: build
+  script:
+    - cargo build
+
+format-check:
+  stage: static-analysis
+  needs: ["build"]
+  script:
+    - rustup component add rustfmt
+    - cargo fmt --check
+
+clippy-check:
+  stage: static-analysis
+  needs: ["build"]
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets --all-features
+
+tests:
+  stage: test
+  needs: ["format-check", "clippy-check"]
+  script:
+    - apt update
+    - apt install curl -y
+    - curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    - cargo nextest run --profile ci
+    - mv target/nextest/ci/junit.xml .
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+
+docs:
+  stage: docs
+  needs: ["tests"]
+  script:
+    - cargo doc
+    - mv target/doc public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
