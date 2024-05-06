@@ -30,7 +30,7 @@ clippy-check:
 
 tests:
   stage: test
-  needs: ["build"]
+  needs: ["format-check", "clippy-check"]
   script:
     - apt update
     - apt install curl -y
@@ -44,7 +44,7 @@ tests:
 
 docs:
   stage: docs
-  needs: ["build", "format-check", "clippy-check", "tests"]
+  needs: ["tests"]
   script:
     - cargo doc
     - mv target/doc public
