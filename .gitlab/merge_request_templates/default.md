@@ -1,6 +1,6 @@
 This MR closes issues *issue numbers separated by commas*
 
-# Checklist
+## Checklist
 - [ ] Does the code compile and run without problems in any part of the code?
 - [ ] Did you achieve the definition of done according to your specified issues?
 - [ ] Do all tests pass?
@@ -10,8 +10,8 @@ This MR closes issues *issue numbers separated by commas*
 - [ ] Are you merging to the right branch?
 - [ ] Did you fill in metadata of this MR (labels, milestones, etc.)?
 
-# Details
+## Details
 *Detail what the purpose is of this MR, explain any new functionalities, fixes, refactorings, etc.* 
 
-# How to test
+## How to test
 *Specify how reviewers should test your possibly new features, include screenshots and figures if that makes it easier to explain*
