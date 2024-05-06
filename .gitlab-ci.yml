@@ -33,7 +33,7 @@ tests:
   needs: ["build"]
   script:
     - apt update && apt upgrade
-    - apt install curl
+    - apt install curl -y
     - curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     - cargo nextest run --profile ci
     - mv target/nextest/ci/junit.xml .
