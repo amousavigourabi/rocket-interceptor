@@ -1,21 +1,15 @@
 use std::io;
-use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::rc::Rc;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 
 use bytes::{Buf, BytesMut};
 use log::*;
-use openssl::base64;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
-use secp256k1::{Message as CryptoMessage, Secp256k1, SecretKey};
-use sha2::{Digest, Sha512};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::macros::support::Pin;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
 async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
@@ -85,13 +79,8 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
 
         buf.advance(n + 4);
 
-        if response_code != 101 {
-            loop {
-                if ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0 {
-                    debug!("Body: {}", String::from_utf8_lossy(&buf).trim());
-                }
-                break;
-            }
+        if response_code != 101 && ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0 {
+            debug!("Body: {}", String::from_utf8_lossy(&buf).trim());
         }
 
         if !buf.is_empty() {
@@ -122,7 +111,7 @@ async fn peer_forward_msg(
         error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
         return;
     }
-    let mut bytes = buf.to_vec();
+    let bytes = buf.to_vec();
     if bytes[0] & 0x80 != 0 {
         error!("{:?}", bytes[0]);
         panic!("Received compressed message");
