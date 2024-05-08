@@ -31,6 +31,7 @@ format-check:
 clippy-check:
   stage: static-analysis
   needs: ["build"]
+  extends: .install_dependencies
   script:
     - rustup component add clippy
     - cargo clippy --all-targets --all-features
