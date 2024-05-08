@@ -1,134 +1,32 @@
 use std::io;
 use std::io::Read;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::rc::Rc;
+use std::str::FromStr;
+use std::sync::Arc;
+
 use bytes::{Buf, BytesMut};
 use log::*;
+use openssl::base64;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
 use secp256k1::{Message as CryptoMessage, Secp256k1, SecretKey};
 use sha2::{Digest, Sha512};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use std::rc::Rc;
-use openssl::base64;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::macros::support::Pin;
 use tokio::net::TcpStream;
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
-#[tokio::main]
-async fn main() -> io::Result<()> {
-    let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
-    let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
-    //let private_key = "sskExrvcMP7YGDnS5ub8YCgEBcRc1";
-
-
-    let ssl_stream_1 = Arc::new(Mutex::new(connect_to_peer("172.18.0.3", n2_public_key).await));
-    let ssl_stream_2 = Arc::new(Mutex::new(connect_to_peer("172.18.0.2", n1_public_key).await));
-
-    let ssl_stream_1_1 = Arc::clone(&ssl_stream_1);
-    let ssl_stream_2_1 = Arc::clone(&ssl_stream_2);
-
-    let t1 = tokio::spawn(async move {
-        loop {
-            let mut buf = BytesMut::with_capacity(64 * 1024);
-            buf.resize(64 * 1024, 0);
-            let size = ssl_stream_1.lock().await
-                .read(buf.as_mut())
-                .await
-                .expect("Unable to read from ssl stream");
-            buf.resize(size, 0);
-            if size == 0 {
-                error!(
-                    "Current buffer: {}",
-                    String::from_utf8_lossy(&buf).trim()
-                );
-            }
-            let mut bytes = buf.to_vec();
-            if bytes[0] & 0x80 != 0 {
-                error!("{:?}", bytes[0]);
-                panic!("Received compressed message");
-            }
-
-            if bytes[0] & 0xFC != 0 {
-                error!("Unknown version header");
-            }
-
-            //let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
-
-            //if payload_size > 64 * 1024 * 1024 {
-            //    panic!("Message size too large");
-            //}
-
-            //if buf.len() < 6 + payload_size {
-            //    break;
-            //}
-
-            // Send received message to scheduler
-            //let message = bytes[0..(6 + payload_size)].to_vec();
-            //println!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-            ssl_stream_2.lock().await.write_all(&buf).await.expect("Could not write");
-            println!("Sent to 2");
-        }
-    });
-    let t2 = tokio::spawn(async move {
-        loop {
-            let mut buf = BytesMut::with_capacity(64 * 1024);
-            buf.resize(64 * 1024, 0);
-            let size = ssl_stream_2_1.lock().await
-                .read(buf.as_mut())
-                .await
-                .expect("Unable to read from ssl stream");
-            buf.resize(size, 0);
-            if size == 0 {
-                error!(
-                    "Current buffer: {}",
-                    String::from_utf8_lossy(&buf).trim()
-                );
-            }
-            let mut bytes = buf.to_vec();
-            if bytes[0] & 0x80 != 0 {
-                error!("{:?}", bytes[0]);
-                panic!("Received compressed message");
-            }
-
-            if bytes[0] & 0xFC != 0 {
-                error!("Unknow version header");
-            }
-
-            //let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
-
-            //if payload_size > 64 * 1024 * 1024 {
-            //    panic!("Message size too large");
-            //}
-
-            //if buf.len() < 6 + payload_size {
-            //    break;
-            //}
-
-            // Send received message to scheduler
-            //let message = bytes[0..(6 + payload_size)].to_vec();
-            //println!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-            ssl_stream_1_1.lock().await.write_all(&buf).await.expect("Could not write");
-            println!("Sent to 1");
-        }
-    });
-    t1.await.expect("Could not join t1");
-    t2.await.expect("Could not join t2");
-    Ok(())
-}
-
 async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
-    let proxy_address = SocketAddr::new(
-        IpAddr::from_str(ip).unwrap(),
-        51235,
-    );
+    let proxy_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), 51235);
+
     let stream = match TcpStream::connect(proxy_address).await {
         Ok(tcp_stream) => tcp_stream,
         Err(e) => panic!("{}", e),
     };
     stream.set_nodelay(true).expect("Set nodelay failed");
+
     let ctx = SslContext::builder(SslMethod::tls()).unwrap().build();
     let ssl = Ssl::new(&ctx).unwrap();
     let mut ssl_stream = SslStream::<TcpStream>::new(ssl, stream).unwrap();
@@ -153,7 +51,6 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
         .expect("Unable to write during handshake");
 
     let mut buf = BytesMut::new();
-    println!("Body: {}", String::from_utf8_lossy(&buf).trim());
     let mut vec = vec![0; 4096];
     let size = ssl_stream
         .read(&mut vec)
@@ -163,10 +60,7 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
     buf.extend_from_slice(&vec);
 
     if size == 0 {
-        error!(
-                    "Current buffer: {}",
-                    String::from_utf8_lossy(&buf).trim()
-                );
+        error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
         panic!("socket closed");
     }
 
@@ -179,14 +73,14 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
         }
 
         let response_code = resp.code.unwrap();
-        println!(
-            "Response: version {}, code {}, reason {}",
+        debug!(
+            "Peer Handshake Response: version {}, status {}, reason {} \nheaders:\n",
             resp.version.unwrap(),
             resp.code.unwrap(),
             resp.reason.unwrap()
         );
         for header in headers.iter().filter(|h| **h != httparse::EMPTY_HEADER) {
-            println!("{}: {}", header.name, String::from_utf8_lossy(header.value));
+            debug!("{}: {}", header.name, String::from_utf8_lossy(header.value));
         }
 
         buf.advance(n + 4);
@@ -194,14 +88,14 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
         if response_code != 101 {
             loop {
                 if ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0 {
-                    println!("Body: {}", String::from_utf8_lossy(&buf).trim());
+                    debug!("Body: {}", String::from_utf8_lossy(&buf).trim());
                 }
                 break;
             }
         }
 
         if !buf.is_empty() {
-            println!(
+            debug!(
                 "Current buffer is not empty?: {}",
                 String::from_utf8_lossy(&buf).trim()
             );
@@ -209,4 +103,72 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
         }
     }
     ssl_stream
+}
+
+async fn peer_forward_msg(
+    from: Arc<Mutex<SslStream<TcpStream>>>,
+    to: Arc<Mutex<SslStream<TcpStream>>>,
+) {
+    let mut buf = BytesMut::with_capacity(64 * 1024);
+    buf.resize(64 * 1024, 0);
+    let size = from
+        .lock()
+        .await
+        .read(buf.as_mut())
+        .await
+        .expect("Unable to read from ssl stream");
+    buf.resize(size, 0);
+    if size == 0 {
+        error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
+        return;
+    }
+    let mut bytes = buf.to_vec();
+    if bytes[0] & 0x80 != 0 {
+        error!("{:?}", bytes[0]);
+        panic!("Received compressed message");
+    }
+
+    if bytes[0] & 0xFC != 0 {
+        error!("Unknown version header");
+    }
+    to.lock()
+        .await
+        .write_all(&buf)
+        .await
+        .expect("Could not write");
+}
+
+async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
+    let arc_stream1_0 = Arc::new(Mutex::new(node1));
+    let arc_stream2_0 = Arc::new(Mutex::new(node2));
+
+    let arc_stream1_1 = Arc::clone(&arc_stream1_0);
+    let arc_stream2_1 = Arc::clone(&arc_stream2_0);
+
+    let t1 = tokio::spawn(async move {
+        loop {
+            peer_forward_msg(arc_stream1_0.clone(), arc_stream2_0.clone()).await;
+        }
+    });
+
+    let t2 = tokio::spawn(async move {
+        loop {
+            peer_forward_msg(arc_stream1_1.clone(), arc_stream2_1.clone()).await;
+        }
+    });
+
+    t1.await.expect("thread 1 failed.");
+    t2.await.expect("thread 2 failed.");
+}
+
+#[tokio::main]
+async fn main() -> io::Result<()> {
+    let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
+    let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
+
+    let ssl_stream1 = connect_to_peer("172.18.0.3", n2_public_key).await;
+    let ssl_stream2 = connect_to_peer("172.18.0.2", n1_public_key).await;
+
+    handle_conn(ssl_stream1, ssl_stream2).await;
+    Ok(())
 }
