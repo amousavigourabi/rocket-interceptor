@@ -2,7 +2,7 @@ services:
   validator_1:
     platform: linux/amd64
     container_name: validator_1
-    image: "rippled_custom:latest"
+    image: "isvanloon/rippled-no-sig-check:latest"
     ports:
       - "8001:80"
       - "5006:5005"
@@ -13,7 +13,7 @@ services:
   validator_2:
     platform: linux/amd64
     container_name: validator_2
-    image: "rippled_custom:latest"
+    image: "isvanloon/rippled-no-sig-check:latest"
     ports:
       - "8002:80"
       - "5007:5005"
