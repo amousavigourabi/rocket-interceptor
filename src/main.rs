@@ -6,13 +6,14 @@ use std::sync::Arc;
 use bytes::{Buf, BytesMut};
 use log::*;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
+use std::env::current_dir;
+use std::env::set_var;
+use std::process::{Command, Stdio};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::macros::support::Pin;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio_openssl::SslStream;
-use std::process::{Command, Stdio};
-use std::env::current_dir;
 
 async fn connect_to_peer(ip: &str, port: u16, public_key: &str) -> SslStream<TcpStream> {
     let proxy_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
@@ -86,7 +87,7 @@ async fn connect_to_peer(ip: &str, port: u16, public_key: &str) -> SslStream<Tcp
         }
 
         if !buf.is_empty() {
-            println!(
+            debug!(
                 "Current buffer is not empty?: {}",
                 String::from_utf8_lossy(&buf).trim()
             );
@@ -139,14 +140,14 @@ async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
     let t1 = tokio::spawn(async move {
         loop {
             peer_forward_msg(arc_stream1_0.clone(), arc_stream2_0.clone()).await;
-            println!("forwarded 1->2")
+            debug!("forwarded 1->2")
         }
     });
 
     let t2 = tokio::spawn(async move {
         loop {
             peer_forward_msg(arc_stream1_1.clone(), arc_stream2_1.clone()).await;
-            println!("forwarded 2->1")
+            debug!("forwarded 2->1")
         }
     });
 
@@ -162,7 +163,11 @@ fn start_container(name: &str, port: u16) {
         .arg("--name")
         .arg(name)
         .arg("--mount")
-        .arg(format!("type=bind,source={}/network/{}/config,target=/config", current_dir().unwrap().to_str().unwrap(), name))
+        .arg(format!(
+            "type=bind,source={}/network/{}/config,target=/config",
+            current_dir().unwrap().to_str().unwrap(),
+            name
+        ))
         .arg("isvanloon/rippled-no-sig-check")
         .stdout(Stdio::null())
         .stdin(Stdio::null())
@@ -173,6 +178,9 @@ fn start_container(name: &str, port: u16) {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    set_var("RUST_LOG", "DEBUG");
+    env_logger::init();
+
     let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
     let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
 
