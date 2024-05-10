@@ -149,7 +149,7 @@ async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
 
     let t2 = tokio::spawn(async move {
         loop {
-            peer_forward_msg(arc_stream1_1.clone(), arc_stream2_1.clone()).await;
+            peer_forward_msg(arc_stream2_1.clone(), arc_stream1_1.clone()).await;
             debug!("forwarded 2->1")
         }
     });
