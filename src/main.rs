@@ -11,9 +11,11 @@ use tokio::macros::support::Pin;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio_openssl::SslStream;
+use std::process::{Command, Stdio};
+use std::env::current_dir;
 
-async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
-    let proxy_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), 51235);
+async fn connect_to_peer(ip: &str, port: u16, public_key: &str) -> SslStream<TcpStream> {
+    let proxy_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
 
     let stream = match TcpStream::connect(proxy_address).await {
         Ok(tcp_stream) => tcp_stream,
@@ -84,7 +86,7 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
         }
 
         if !buf.is_empty() {
-            debug!(
+            println!(
                 "Current buffer is not empty?: {}",
                 String::from_utf8_lossy(&buf).trim()
             );
@@ -152,13 +154,33 @@ async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
     t2.await.expect("thread 2 failed.");
 }
 
+fn start_container(name: &str, port: u16) {
+    Command::new("docker")
+        .arg("run")
+        .arg("-p")
+        .arg(format!("{}:51235", port))
+        .arg("--name")
+        .arg(name)
+        .arg("--mount")
+        .arg(format!("type=bind,source={}/network/{}/config,target=/config", current_dir().unwrap().to_str().unwrap(), name))
+        .arg("isvanloon/rippled-no-sig-check")
+        .stdout(Stdio::null())
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("command failed to start");
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
     let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
 
-    let ssl_stream1 = connect_to_peer("172.20.0.2", n2_public_key).await;
-    let ssl_stream2 = connect_to_peer("172.20.0.3", n1_public_key).await;
+    start_container("validator_1", 6001);
+    start_container("validator_2", 6002);
+
+    let ssl_stream1 = connect_to_peer("127.0.0.1", 6001, n2_public_key).await;
+    let ssl_stream2 = connect_to_peer("127.0.0.1", 6002, n1_public_key).await;
 
     handle_conn(ssl_stream1, ssl_stream2).await;
     Ok(())
