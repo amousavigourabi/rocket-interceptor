@@ -10,6 +10,9 @@ services:
       - "9001:51235"
     volumes:
       - ./network/validator_1/config:/config/
+    networks:
+      ripple_network:
+        ipv4_address: 172.20.0.2
   validator_2:
     platform: linux/amd64
     container_name: validator_2
@@ -21,6 +24,9 @@ services:
       - "9002:51235"
     volumes:
       - ./network/validator_2/config:/config/
+    networks:
+      ripple_network:
+        ipv4_address: 172.20.0.3
 #  validator_3:
 #    platform: linux/amd64
 #    container_name: validator_3
@@ -39,3 +45,10 @@ services:
 #    platform: linux/amd64
 #    container_name: key_generate
 #    image: "xrpllabsofficial/xrpld"
+
+networks:
+  ripple_network:
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1

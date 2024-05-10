@@ -88,7 +88,7 @@ async fn connect_to_peer(ip: &str, public_key: &str) -> SslStream<TcpStream> {
                 "Current buffer is not empty?: {}",
                 String::from_utf8_lossy(&buf).trim()
             );
-            panic!("buffer should be empty");
+            panic!("buffer should be empty, are the slots full?");
         }
     }
     ssl_stream
@@ -137,12 +137,14 @@ async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
     let t1 = tokio::spawn(async move {
         loop {
             peer_forward_msg(arc_stream1_0.clone(), arc_stream2_0.clone()).await;
+            println!("forwarded 1->2")
         }
     });
 
     let t2 = tokio::spawn(async move {
         loop {
             peer_forward_msg(arc_stream1_1.clone(), arc_stream2_1.clone()).await;
+            println!("forwarded 2->1")
         }
     });
 
@@ -155,8 +157,8 @@ async fn main() -> io::Result<()> {
     let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
     let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
 
-    let ssl_stream1 = connect_to_peer("172.18.0.3", n2_public_key).await;
-    let ssl_stream2 = connect_to_peer("172.18.0.2", n1_public_key).await;
+    let ssl_stream1 = connect_to_peer("172.20.0.2", n2_public_key).await;
+    let ssl_stream2 = connect_to_peer("172.20.0.3", n1_public_key).await;
 
     handle_conn(ssl_stream1, ssl_stream2).await;
     Ok(())
