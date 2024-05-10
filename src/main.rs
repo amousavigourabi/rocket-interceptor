@@ -9,10 +9,12 @@ use openssl::ssl::{Ssl, SslContext, SslMethod};
 use std::env::current_dir;
 use std::env::set_var;
 use std::process::{Command, Stdio};
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::macros::support::Pin;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use tokio::time::sleep;
 use tokio_openssl::SslStream;
 
 async fn connect_to_peer(ip: &str, port: u16, public_key: &str) -> SslStream<TcpStream> {
@@ -71,12 +73,13 @@ async fn connect_to_peer(ip: &str, port: u16, public_key: &str) -> SslStream<Tcp
 
         let response_code = resp.code.unwrap();
         debug!(
-            "Peer Handshake Response: version {}, status {}, reason {} \nheaders:\n",
+            "Peer Handshake Response: version {}, status {}, reason {}",
             resp.version.unwrap(),
             resp.code.unwrap(),
             resp.reason.unwrap()
         );
         for header in headers.iter().filter(|h| **h != httparse::EMPTY_HEADER) {
+            debug!("Printing response headers:");
             debug!("{}: {}", header.name, String::from_utf8_lossy(header.value));
         }
 
@@ -155,9 +158,11 @@ async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
     t2.await.expect("thread 2 failed.");
 }
 
-fn start_container(name: &str, port: u16) {
+async fn start_container(name: &str, port: u16) {
+    debug!("starting docker container: {}", name);
     Command::new("docker")
         .arg("run")
+        .arg("-d")
         .arg("-p")
         .arg(format!("{}:51235", port))
         .arg("--name")
@@ -172,8 +177,10 @@ fn start_container(name: &str, port: u16) {
         .stdout(Stdio::null())
         .stdin(Stdio::null())
         .stderr(Stdio::null())
-        .spawn()
-        .expect("command failed to start");
+        .status()
+        .expect("failed to start docker container");
+
+    sleep(Duration::from_secs(2)).await;
 }
 
 #[tokio::main]
@@ -184,8 +191,8 @@ async fn main() -> io::Result<()> {
     let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
     let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
 
-    start_container("validator_1", 6001);
-    start_container("validator_2", 6002);
+    start_container("validator_1", 6001).await;
+    start_container("validator_2", 6002).await;
 
     let ssl_stream1 = connect_to_peer("127.0.0.1", 6001, n2_public_key).await;
     let ssl_stream2 = connect_to_peer("127.0.0.1", 6002, n1_public_key).await;
