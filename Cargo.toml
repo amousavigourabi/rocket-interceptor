@@ -6,3 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { version = "1.37.0", features = ["full"] }
+openssl = "0.10.64"
+secp256k1 = "0.29.0"
+log = "0.4.21"
+bytes = "1.6.0"
+sha2 = "0.11.0-pre.3"
+tokio-openssl = "0.6.4"
+httparse = "1.8.0"
+env_logger = "0.11.3"

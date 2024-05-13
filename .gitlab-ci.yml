@@ -9,8 +9,15 @@ stages:
   - test
   - docs
 
+.install_dependencies:
+  before_script:
+    - apt update
+    - apt install curl -y
+    - apt install libssl-dev pkg-config -y
+
 build:
   stage: build
+  extends: .install_dependencies
   script:
     - cargo build
 
@@ -24,6 +31,7 @@ format-check:
 clippy-check:
   stage: static-analysis
   needs: ["build"]
+  extends: .install_dependencies
   script:
     - rustup component add clippy
     - cargo clippy --all-targets --all-features
@@ -31,9 +39,8 @@ clippy-check:
 tests:
   stage: test
   needs: ["format-check", "clippy-check"]
+  extends: .install_dependencies
   script:
-    - apt update
-    - apt install curl -y
     - curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     - cargo nextest run --profile ci
     - mv target/nextest/ci/junit.xml .
