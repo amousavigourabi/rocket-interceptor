@@ -24,7 +24,7 @@ impl<'a> PeerConnector<'a> {
         -> (JoinHandle<()>, JoinHandle<()>) {
         let ssl_stream_1 = Self::create_ssl_stream(self.ip_addr, self.base_port+&peer1, &pub_key2).await;
         let ssl_stream_2 = Self::create_ssl_stream(self.ip_addr, self.base_port+&peer2, &pub_key1).await;
-        Self::handle_peer_connections(ssl_stream_1, ssl_stream_2).await
+        Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1, peer2).await
     }
 
     /// Create an SSL stream from a peer to another peer
@@ -111,7 +111,8 @@ impl<'a> PeerConnector<'a> {
 
     /// Handle the connection between 2 peers
     /// Returns 2 threads which continuously handle incoming messages
-    async fn handle_peer_connections(ssl_stream_1: SslStream<TcpStream>, ssl_stream_2: SslStream<TcpStream>)
+    async fn handle_peer_connections(ssl_stream_1: SslStream<TcpStream>, ssl_stream_2: SslStream<TcpStream>,
+                                    peer1: u16, peer2: u16)
         -> (JoinHandle<()>, JoinHandle<()>){
         let arc_stream1_0 = Arc::new(Mutex::new(ssl_stream_1));
         let arc_stream2_0 = Arc::new(Mutex::new(ssl_stream_2));
@@ -121,15 +122,13 @@ impl<'a> PeerConnector<'a> {
 
         let thread_1 = tokio::spawn(async move {
             loop {
-                Self::handle_message(&arc_stream1_0, &arc_stream2_0).await;
-                debug!("Forwarded peer message 1->2")
+                Self::handle_message(&arc_stream1_0, &arc_stream2_0, peer1, peer2).await;
             }
         });
 
         let thread_2 = tokio::spawn(async move {
             loop {
-                Self::handle_message(&arc_stream2_1, &arc_stream1_1).await;
-                debug!("Forwarded peer message 2->1")
+                Self::handle_message(&arc_stream2_1, &arc_stream1_1, peer2, peer1).await;
             }
         });
 
@@ -138,7 +137,8 @@ impl<'a> PeerConnector<'a> {
 
     /// Handles incoming messages from the 'form' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
-    async fn handle_message(from: &Arc<Mutex<SslStream<TcpStream>>>, to: &Arc<Mutex<SslStream<TcpStream>>>) {
+    async fn handle_message(from: &Arc<Mutex<SslStream<TcpStream>>>, to: &Arc<Mutex<SslStream<TcpStream>>>,
+                            peer_from: u16, peer_to:u16) {
         let mut buf = BytesMut::with_capacity(64 * 1024);
         buf.resize(64 * 1024, 0);
         let size = from
@@ -169,5 +169,7 @@ impl<'a> PeerConnector<'a> {
             .write_all(&buf)
             .await
             .expect("Could not write to SSL stream");
+
+        debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
     }
 }

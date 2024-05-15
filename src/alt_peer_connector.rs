@@ -127,7 +127,7 @@ impl PeerConnection {
 
     /// Handle the connection between 2 peers
     /// Returns 2 threads which continuously handle incoming messages
-    async fn handle_peer_connections(ssl_stream_1: SslStream<TcpStream>, ssl_stream_2: SslStream<TcpStream>)
+    async fn handle_peer_connections(&self, ssl_stream_1: SslStream<TcpStream>, ssl_stream_2: SslStream<TcpStream>)
                                      -> (JoinHandle<()>, JoinHandle<()>){
         let arc_stream1_0 = Arc::new(Mutex::new(ssl_stream_1));
         let arc_stream2_0 = Arc::new(Mutex::new(ssl_stream_2));
@@ -137,14 +137,14 @@ impl PeerConnection {
 
         let thread_1 = tokio::spawn(async move {
             loop {
-                Self::handle_message(&arc_stream1_0, &arc_stream2_0).await;
+                &self.handle_message(&arc_stream1_0, &arc_stream2_0).await;
                 debug!("Forwarded peer message 1->2")
             }
         });
 
         let thread_2 = tokio::spawn(async move {
             loop {
-                Self::handle_message(&arc_stream2_1, &arc_stream1_1).await;
+                &self.handle_message(&arc_stream2_1, &arc_stream1_1).await;
                 debug!("Forwarded peer message 2->1")
             }
         });
@@ -180,6 +180,8 @@ impl PeerConnection {
         // TODO: use returned information for further execution
         // Send the 2 peers (the numbers) with the request
         // Controller should have information on the network itself
+
+
 
         // For now: send the raw bytes without processing to the receiver
         to.lock()
