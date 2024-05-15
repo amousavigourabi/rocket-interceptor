@@ -2,6 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
@@ -11,6 +12,8 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
+/// The lifetime specifier 'a is needed to make sure that
+/// the reference to ip_addr stays alive while this object is alive
 pub struct PeerConnector<'a> {
     pub ip_addr: &'a str,
     pub base_port: u16
@@ -163,6 +166,14 @@ impl<'a> PeerConnector<'a> {
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
 
+        let start_time = Instant::now();
+
+        // Delay functionality
+        // For now peer1 gets delayed for 500ms
+        if peer_from == 1 {
+            Self::delay_execution(start_time, 500).await;
+        }
+
         // For now: send the raw bytes without processing to the receiver
         to.lock()
             .await
@@ -171,5 +182,18 @@ impl<'a> PeerConnector<'a> {
             .expect("Could not write to SSL stream");
 
         debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
+    }
+
+    async fn delay_execution(start_time: Instant, ms: u64) {
+        let elapsed_time = start_time.elapsed();
+        let delay_duration = Duration::from_millis(ms) - elapsed_time;
+
+        debug!("Delay peer");
+
+        if delay_duration > Duration::new(0, 0) {
+            tokio::time::sleep(delay_duration).await;
+        }
+
+        debug!("Delay completed")
     }
 }
