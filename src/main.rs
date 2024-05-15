@@ -8,7 +8,7 @@ use std::sync::Arc;
 use bytes::{Buf, BytesMut};
 use log::*;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
-use std::env::set_var;
+use std::env;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::macros::support::Pin;
 use tokio::net::TcpStream;
@@ -158,7 +158,7 @@ async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    set_var("RUST_LOG", "DEBUG");
+    env::set_var("RUST_LOG", "DEBUG");
     env_logger::init();
 
     // Init docker network
@@ -169,16 +169,16 @@ async fn main() -> io::Result<()> {
     // Iterate over every unique validator node pair
     let mut threads = Vec::new();
     for (i, container1) in network.containers.iter().enumerate() {
-        for container2 in &network.containers[i + 1..network.containers.len()] {
+        for container2 in &network.containers[(i + 1)..network.containers.len()] {
             let ssl_stream1 = connect_to_peer(
                 "127.0.0.1",
-                container1.port,
+                container1.port_peer,
                 container2.key_data.validation_public_key.as_str(),
             )
             .await;
             let ssl_stream2 = connect_to_peer(
                 "127.0.0.1",
-                container2.port,
+                container2.port_peer,
                 container1.key_data.validation_public_key.as_str(),
             )
             .await;

@@ -11,6 +11,9 @@ use std::time::Duration;
 #[derive(Debug, Deserialize)]
 pub struct NetworkConfig {
     base_port: Option<u16>,
+    base_port_ws: Option<u16>,
+    base_port_ws_admin: Option<u16>,
+    base_port_rpc: Option<u16>,
     number_of_nodes: u16,
 }
 
@@ -60,7 +63,10 @@ pub struct ValidatorKeyData {
 #[derive(Debug)]
 pub struct DockerContainer {
     pub name: String,
-    pub port: u16,
+    pub port_peer: u16,
+    pub port_ws: u16,
+    pub port_ws_admin: u16,
+    pub port_rpc: u16,
     pub key_data: ValidatorKeyData,
 }
 
@@ -85,12 +91,18 @@ impl DockerNetwork {
         let validator_keys = self.generate_keys(self.config.number_of_nodes);
         let names_with_keys = self.generate_validator_configs(&validator_keys);
 
-        let base_port = self.config.base_port.unwrap_or(6000);
+        let base_port_peer = self.config.base_port.unwrap_or(60000);
+        let base_port_ws = self.config.base_port_ws.unwrap_or(61000);
+        let base_port_ws_admin = self.config.base_port_ws_admin.unwrap_or(62000);
+        let base_port_rpc = self.config.base_port_rpc.unwrap_or(63000);
 
         for (i, (name, keys)) in names_with_keys.iter().enumerate() {
             let validator_container = DockerContainer {
                 name: name.clone(),
-                port: base_port + i as u16,
+                port_peer: base_port_peer + i as u16,
+                port_ws: base_port_ws + i as u16,
+                port_ws_admin: base_port_ws_admin + i as u16,
+                port_rpc: base_port_rpc + i as u16,
                 key_data: keys.clone(),
             };
             self.start_validator(&validator_container);
@@ -114,7 +126,10 @@ impl DockerNetwork {
             .arg("run")
             .arg("-d")
             .arg("--rm")
-            .args(["-p", format!("{}:51235", container.port).as_str()])
+            .args(["-p", format!("{}:51235", container.port_peer).as_str()])
+            .args(["-p", format!("{}:6005", container.port_ws).as_str()])
+            .args(["-p", format!("{}:6006", container.port_ws_admin).as_str()])
+            .args(["-p", format!("{}:5005", container.port_rpc).as_str()])
             .args(["--name", container.name.as_str()])
             .args([
                 "--mount",
