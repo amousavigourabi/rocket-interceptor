@@ -13,6 +13,11 @@ pub struct NetworkConfig {
     number_of_nodes: u16,
 }
 
+/// Reads the `network-config.toml` file and returns a parsed `NetworkConfig` struct.
+///
+/// # Panics
+/// This function panics if there is an error with reading the config file, or
+/// if the configuration does not adhere to the correct format.
 pub fn get_config() -> NetworkConfig {
     let config_file = "network-config.toml";
     let contents = match fs::read_to_string(config_file) {
@@ -72,6 +77,9 @@ impl DockerNetwork {
         }
     }
 
+    /// Initializes the docker network by generating keys for each configured node, and starting
+    /// them using `docker run`. The containers that were started successfully are appended to
+    /// the `containers` field in the struct.
     pub fn initialize_network(&mut self) {
         let validator_keys = self.generate_keys(self.config.number_of_nodes);
         let names_with_keys = self.generate_validator_configs(&validator_keys);
@@ -148,6 +156,11 @@ impl DockerNetwork {
             .expect("Could not stop container: key_generator");
     }
 
+    /// Generates `n` validator keys using a `rippled` instance.
+    ///
+    /// # Panics
+    /// This function panics if the JSON response from `rippled` cannot be correctly
+    /// deserialized to the `ValidationKeyCreateResponse` struct.
     fn generate_keys(&self, n: u16) -> Vec<ValidatorKeyData> {
         Command::new("docker")
             .arg("run")
@@ -196,6 +209,12 @@ impl DockerNetwork {
         key_vec
     }
 
+    /// Generates and writes the config files for every key in `keys` to disk. The configurations
+    /// are saved to /network/validators/<name>
+    ///
+    /// # Panics
+    /// This function panics when the `rippled_base.cfg` cannot be read, or the config cannot
+    /// be written to disk (no permissions/directory does not exist)
     fn generate_validator_configs(
         &self,
         keys: &[ValidatorKeyData],
