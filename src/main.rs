@@ -1,13 +1,13 @@
 mod peer_connector;
 
-use std::io;
+use crate::peer_connector::PeerConnector;
 use log::*;
 use std::env::current_dir;
 use std::env::set_var;
+use std::io;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 use tokio::time::sleep;
-use crate::peer_connector::PeerConnector;
 
 async fn start_container(name: &str, port: u16) {
     debug!("Starting docker container: {}", name);
@@ -45,8 +45,13 @@ async fn main() -> io::Result<()> {
     start_container("validator_1", 6001).await;
     start_container("validator_2", 6002).await;
 
-    let peer_connector = PeerConnector { ip_addr: "127.0.0.1", base_port: 6000 };
-    let (t1, t2) = peer_connector.connect_peers(1, 2, &n1_public_key, &n2_public_key).await;
+    let peer_connector = PeerConnector {
+        ip_addr: "127.0.0.1",
+        base_port: 6000,
+    };
+    let (t1, t2) = peer_connector
+        .connect_peers(1, 2, n1_public_key, n2_public_key)
+        .await;
 
     // Await the threads for now (never stopping, unless error occurs),
     // we need to add a concrete stopping condition later on

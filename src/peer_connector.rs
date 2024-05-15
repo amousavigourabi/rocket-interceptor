@@ -1,11 +1,11 @@
+use bytes::{Buf, BytesMut};
+use log::{debug, error};
+use openssl::ssl::{Ssl, SslContext, SslMethod};
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use bytes::{Buf, BytesMut};
-use log::{debug, error};
-use openssl::ssl::{Ssl, SslContext, SslMethod};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -16,19 +16,24 @@ use tokio_openssl::SslStream;
 /// the reference to ip_addr stays alive while this object is alive.
 pub struct PeerConnector<'a> {
     pub ip_addr: &'a str,
-    pub base_port: u16
+    pub base_port: u16,
 }
 
 impl<'a> PeerConnector<'a> {
     /// Connect 2 peers using their numbers.
     /// Established SSL streams between the peers.
     /// Returns 2 threads which handle the messages sent over the streams.
-    pub async fn connect_peers(&self, peer1: u16, peer2: u16, pub_key1: &str, pub_key2: &str)
-        -> (JoinHandle<()>, JoinHandle<()>) {
-        let ssl_stream_1 = Self::create_ssl_stream(self.ip_addr,
-                                                   self.base_port+&peer1, &pub_key2).await;
-        let ssl_stream_2 = Self::create_ssl_stream(self.ip_addr,
-                                                   self.base_port+&peer2, &pub_key1).await;
+    pub async fn connect_peers(
+        &self,
+        peer1: u16,
+        peer2: u16,
+        pub_key1: &str,
+        pub_key2: &str,
+    ) -> (JoinHandle<()>, JoinHandle<()>) {
+        let ssl_stream_1 =
+            Self::create_ssl_stream(self.ip_addr, self.base_port + peer1, pub_key2).await;
+        let ssl_stream_2 =
+            Self::create_ssl_stream(self.ip_addr, self.base_port + peer2, pub_key1).await;
         Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1, peer2).await
     }
 
@@ -51,7 +56,7 @@ impl<'a> PeerConnector<'a> {
             .await
             .expect("SSL connection failed");
 
-        let content = Self::format_upgrade_request_content(&pub_key_peer);
+        let content = Self::format_upgrade_request_content(pub_key_peer);
         ssl_stream
             .write_all(content.as_bytes())
             .await
@@ -75,13 +80,17 @@ impl<'a> PeerConnector<'a> {
             let mut headers = [httparse::EMPTY_HEADER; 32];
             let mut resp = httparse::Response::new(&mut headers);
             let status = resp.parse(&buf[0..n + 4]).expect("Response parse failed");
-            if status.is_partial() { panic!("Invalid headers"); }
+            if status.is_partial() {
+                panic!("Invalid headers");
+            }
             let response_code = resp.code.unwrap();
 
-            debug!("Peer Handshake Response: version {}, status {}, reason {}",
+            debug!(
+                "Peer Handshake Response: version {}, status {}, reason {}",
                 resp.version.unwrap(),
                 &response_code,
-                resp.reason.unwrap());
+                resp.reason.unwrap()
+            );
             debug!("Printing response headers:");
             for header in headers.iter().filter(|h| **h != httparse::EMPTY_HEADER) {
                 debug!("{}: {}", header.name, String::from_utf8_lossy(header.value));
@@ -89,13 +98,16 @@ impl<'a> PeerConnector<'a> {
 
             buf.advance(n + 4);
 
-            if response_code != 101
-                && ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0 {
+            if response_code != 101 && ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0
+            {
                 debug!("Body: {}", String::from_utf8_lossy(&buf).trim());
             }
 
             if !buf.is_empty() {
-                debug!("Current buffer is not empty?: {}", String::from_utf8_lossy(&buf).trim());
+                debug!(
+                    "Current buffer is not empty?: {}",
+                    String::from_utf8_lossy(&buf).trim()
+                );
                 panic!("Buffer should be empty, are the peer slots full?");
             }
         }
@@ -119,9 +131,12 @@ impl<'a> PeerConnector<'a> {
 
     /// Handle the connection between 2 peers, while keeping track of the peers' numbers
     /// Returns 2 threads which continuously handle incoming messages
-    async fn handle_peer_connections(ssl_stream_1: SslStream<TcpStream>, ssl_stream_2: SslStream<TcpStream>,
-                                    peer1: u16, peer2: u16)
-        -> (JoinHandle<()>, JoinHandle<()>){
+    async fn handle_peer_connections(
+        ssl_stream_1: SslStream<TcpStream>,
+        ssl_stream_2: SslStream<TcpStream>,
+        peer1: u16,
+        peer2: u16,
+    ) -> (JoinHandle<()>, JoinHandle<()>) {
         let arc_stream1_0 = Arc::new(Mutex::new(ssl_stream_1));
         let arc_stream2_0 = Arc::new(Mutex::new(ssl_stream_2));
 
@@ -145,8 +160,12 @@ impl<'a> PeerConnector<'a> {
 
     /// Handles incoming messages from the 'form' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
-    async fn handle_message(from: &Arc<Mutex<SslStream<TcpStream>>>, to: &Arc<Mutex<SslStream<TcpStream>>>,
-                            peer_from: u16, peer_to:u16) {
+    async fn handle_message(
+        from: &Arc<Mutex<SslStream<TcpStream>>>,
+        to: &Arc<Mutex<SslStream<TcpStream>>>,
+        peer_from: u16,
+        peer_to: u16,
+    ) {
         let mut buf = BytesMut::with_capacity(64 * 1024);
         buf.resize(64 * 1024, 0);
         let size = from
@@ -170,7 +189,9 @@ impl<'a> PeerConnector<'a> {
             panic!("Received compressed message");
         }
 
-        if bytes[0] & 0xFC != 0 { error!("Unknown version header"); }
+        if bytes[0] & 0xFC != 0 {
+            error!("Unknown version header");
+        }
 
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
