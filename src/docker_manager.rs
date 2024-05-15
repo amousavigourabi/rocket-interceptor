@@ -85,14 +85,7 @@ impl DockerNetwork {
         let validator_keys = self.generate_keys(self.config.number_of_nodes);
         let names_with_keys = self.generate_validator_configs(&validator_keys);
 
-        let base_port = match self.config.base_port {
-            Some(port) => {
-                port
-            }
-            None => {
-                6000
-            }
-        };
+        let base_port = self.config.base_port.unwrap_or(6000);
 
         for (i, (name, keys)) in names_with_keys.iter().enumerate() {
             let validator_container = DockerContainer {
