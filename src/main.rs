@@ -1,3 +1,5 @@
+mod docker_manager;
+
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
@@ -163,6 +165,7 @@ async fn start_container(name: &str, port: u16) {
     Command::new("docker")
         .arg("run")
         .arg("-d")
+        .arg("--rm")
         .arg("-p")
         .arg(format!("{}:51235", port))
         .arg("--name")
@@ -188,15 +191,17 @@ async fn main() -> io::Result<()> {
     set_var("RUST_LOG", "DEBUG");
     env_logger::init();
 
-    let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
-    let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
+    docker_manager::initialize_network();
 
-    start_container("validator_1", 6001).await;
-    start_container("validator_2", 6002).await;
-
-    let ssl_stream1 = connect_to_peer("127.0.0.1", 6001, n2_public_key).await;
-    let ssl_stream2 = connect_to_peer("127.0.0.1", 6002, n1_public_key).await;
-
-    handle_conn(ssl_stream1, ssl_stream2).await;
+    // let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
+    // let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
+    //
+    // start_container("validator_1", 6001).await;
+    // start_container("validator_2", 6002).await;
+    //
+    // let ssl_stream1 = connect_to_peer("127.0.0.1", 6001, n2_public_key).await;
+    // let ssl_stream2 = connect_to_peer("127.0.0.1", 6002, n1_public_key).await;
+    //
+    // handle_conn(ssl_stream1, ssl_stream2).await;
     Ok(())
 }
