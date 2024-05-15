@@ -10,6 +10,7 @@ use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
 pub struct NetworkConfig {
+    base_port: Option<u16>,
     number_of_nodes: u16,
 }
 
@@ -84,10 +85,19 @@ impl DockerNetwork {
         let validator_keys = self.generate_keys(self.config.number_of_nodes);
         let names_with_keys = self.generate_validator_configs(&validator_keys);
 
+        let base_port = match self.config.base_port {
+            Some(port) => {
+                port
+            }
+            None => {
+                6000
+            }
+        };
+
         for (i, (name, keys)) in names_with_keys.iter().enumerate() {
             let validator_container = DockerContainer {
                 name: name.clone(),
-                port: (6000 + i) as u16,
+                port: base_port + i as u16,
                 key_data: keys.clone(),
             };
             self.start_validator(&validator_container);
