@@ -46,7 +46,7 @@ async fn main() -> io::Result<()> {
     start_container("validator_2", 6002).await;
 
     let peer_connector = PeerConnector {
-        ip_addr: "127.0.0.1",
+        ip_addr: "127.0.0.1".to_string(),
         base_port: 6000,
     };
     let (t1, t2) = peer_connector

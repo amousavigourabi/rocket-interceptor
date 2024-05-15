@@ -15,26 +15,26 @@ use tokio_openssl::SslStream;
 
 /// The lifetime specifier ('a) is needed to make sure that.
 /// the reference to ip_addr stays alive while this object is alive.
-pub struct PeerConnector<'a> {
-    pub ip_addr: &'a str,
+pub struct PeerConnector {
+    pub ip_addr: String,
     pub base_port: u16,
 }
 
-impl<'a> PeerConnector<'a> {
+impl PeerConnector {
     /// Connect 2 peers using their numbers.
     /// Established SSL streams between the peers.
     /// Returns 2 threads which handle the messages sent over the streams.
     pub async fn connect_peers(
-        &self,
+        self,
         peer1: u16,
         peer2: u16,
         pub_key1: &str,
         pub_key2: &str,
     ) -> (JoinHandle<()>, JoinHandle<()>) {
         let ssl_stream_1 =
-            Self::create_ssl_stream(self.ip_addr, self.base_port + peer1, pub_key2).await;
+            Self::create_ssl_stream(self.ip_addr.as_str(), self.base_port + peer1, pub_key2).await;
         let ssl_stream_2 =
-            Self::create_ssl_stream(self.ip_addr, self.base_port + peer2, pub_key1).await;
+            Self::create_ssl_stream(self.ip_addr.as_str(), self.base_port + peer2, pub_key1).await;
         Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1, peer2).await
     }
 
