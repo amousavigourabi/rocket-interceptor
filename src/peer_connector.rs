@@ -1,6 +1,7 @@
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
+use rand::prelude::*;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
@@ -196,19 +197,30 @@ impl<'a> PeerConnector<'a> {
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
 
-        // For now for testing purposes: peer1 gets delayed for 40ms
-        if peer_from == 1 {
-            Self::delay_execution(peer_from, start_time, 40).await;
+        // For now for testing purposes: peer1 gets delayed for 1000ms with a chance of p=0.3
+        // Move the current execution to a tokio thread which will delay and then send the message
+        if peer_from == 1 && thread_rng().gen_bool(0.3) {
+            let to_clone = to.clone();
+            let _delay_thread = tokio::spawn(async move {
+                Self::delay_execution(peer_from, start_time, 1000).await;
+                to_clone
+                    .lock()
+                    .await
+                    .write_all(&buf)
+                    .await
+                    .expect("Could not write to SSL stream");
+                debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
+            });
         }
-
         // For now: send the raw bytes without processing to the receiver
-        to.lock()
-            .await
-            .write_all(&buf)
-            .await
-            .expect("Could not write to SSL stream");
-
-        debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
+        else {
+            to.lock()
+                .await
+                .write_all(&buf)
+                .await
+                .expect("Could not write to SSL stream");
+            debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
+        }
     }
 
     /// Delay execution with respect to a defined starting time
