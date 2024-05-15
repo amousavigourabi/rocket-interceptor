@@ -12,26 +12,30 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
-/// The lifetime specifier 'a is needed to make sure that
-/// the reference to ip_addr stays alive while this object is alive
+/// The lifetime specifier ('a) is needed to make sure that.
+/// the reference to ip_addr stays alive while this object is alive.
 pub struct PeerConnector<'a> {
     pub ip_addr: &'a str,
     pub base_port: u16
 }
 
 impl<'a> PeerConnector<'a> {
-    /// Connect 2 peers
-    /// Established SSL streams between the peers
-    /// Returns the handling of the messages sent over these streams as 2 threads
+    /// Connect 2 peers using their numbers.
+    /// Established SSL streams between the peers.
+    /// Returns 2 threads which handle the messages sent over the streams.
     pub async fn connect_peers(&self, peer1: u16, peer2: u16, pub_key1: &str, pub_key2: &str)
         -> (JoinHandle<()>, JoinHandle<()>) {
-        let ssl_stream_1 = Self::create_ssl_stream(self.ip_addr, self.base_port+&peer1, &pub_key2).await;
-        let ssl_stream_2 = Self::create_ssl_stream(self.ip_addr, self.base_port+&peer2, &pub_key1).await;
+        let ssl_stream_1 = Self::create_ssl_stream(self.ip_addr,
+                                                   self.base_port+&peer1, &pub_key2).await;
+        let ssl_stream_2 = Self::create_ssl_stream(self.ip_addr,
+                                                   self.base_port+&peer2, &pub_key1).await;
         Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1, peer2).await
     }
 
-    /// Create an SSL stream from a peer to another peer
-    /// Uses the current peer's ip+port and the other peer's public key
+    /// Create an SSL stream from a peer to another peer.
+    /// Uses the current peer's ip+port and the other peer's public key.
+    /// This ssl stream makes sure a peer sends messages to the interceptor first
+    /// instead of sending it straight to the other peer.
     async fn create_ssl_stream(ip: &str, port: u16, pub_key_peer: &str) -> SslStream<TcpStream> {
         let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
         let tcp_stream = match TcpStream::connect(socket_address).await {
@@ -72,11 +76,11 @@ impl<'a> PeerConnector<'a> {
             let mut resp = httparse::Response::new(&mut headers);
             let status = resp.parse(&buf[0..n + 4]).expect("Response parse failed");
             if status.is_partial() { panic!("Invalid headers"); }
-
             let response_code = resp.code.unwrap();
+
             debug!("Peer Handshake Response: version {}, status {}, reason {}",
                 resp.version.unwrap(),
-                resp.code.unwrap(),
+                &response_code,
                 resp.reason.unwrap());
             debug!("Printing response headers:");
             for header in headers.iter().filter(|h| **h != httparse::EMPTY_HEADER) {
@@ -85,7 +89,8 @@ impl<'a> PeerConnector<'a> {
 
             buf.advance(n + 4);
 
-            if response_code != 101 && ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0 {
+            if response_code != 101
+                && ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0 {
                 debug!("Body: {}", String::from_utf8_lossy(&buf).trim());
             }
 
@@ -112,7 +117,7 @@ impl<'a> PeerConnector<'a> {
         )
     }
 
-    /// Handle the connection between 2 peers
+    /// Handle the connection between 2 peers, while keeping track of the peers' numbers
     /// Returns 2 threads which continuously handle incoming messages
     async fn handle_peer_connections(ssl_stream_1: SslStream<TcpStream>, ssl_stream_2: SslStream<TcpStream>,
                                     peer1: u16, peer2: u16)
@@ -150,6 +155,10 @@ impl<'a> PeerConnector<'a> {
             .read(buf.as_mut())
             .await
             .expect("Could not read from SSL stream");
+
+        // This is used to make sure we exclude execution time when delaying messages
+        let start_time = Instant::now();
+
         buf.resize(size, 0);
         if size == 0 {
             error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
@@ -166,12 +175,9 @@ impl<'a> PeerConnector<'a> {
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
 
-        let start_time = Instant::now();
-
-        // Delay functionality
-        // For now peer1 gets delayed for 500ms
+        // For now for testing purposes: peer1 gets delayed for 40ms
         if peer_from == 1 {
-            Self::delay_execution(start_time, 500).await;
+            Self::delay_execution(peer_from, start_time, 40).await;
         }
 
         // For now: send the raw bytes without processing to the receiver
@@ -184,16 +190,15 @@ impl<'a> PeerConnector<'a> {
         debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
     }
 
-    async fn delay_execution(start_time: Instant, ms: u64) {
+    /// Delay execution with respect to a defined starting time
+    async fn delay_execution(peer: u16, start_time: Instant, ms: u64) {
         let elapsed_time = start_time.elapsed();
         let delay_duration = Duration::from_millis(ms) - elapsed_time;
 
-        debug!("Delay peer");
+        debug!("Delaying peer {} for {} ms", peer, ms);
 
         if delay_duration > Duration::new(0, 0) {
             tokio::time::sleep(delay_duration).await;
         }
-
-        debug!("Delay completed")
     }
 }
