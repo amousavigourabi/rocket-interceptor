@@ -7,8 +7,19 @@ service PacketService {
 
 message Packet {
     bytes data = 1;
+    uint32 port = 2;
+    //port
+
 }
 
 message PacketAck {
-    string message = 1;
+    bytes data = 1;
+    uint32 port = 2;
+    uint32 action = 3;
+
+
+
+    // bytes
+    //action
+    //port
 }
