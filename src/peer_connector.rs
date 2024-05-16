@@ -19,7 +19,7 @@ pub struct PeerConnector {
 }
 
 impl PeerConnector {
-    /// Connect 2 peers using their numbers.
+    /// Connect 2 peers using their id's and public keys.
     /// Established SSL streams between the peers.
     /// Returns 2 threads which handle the messages sent over the streams.
     pub async fn connect_peers(
@@ -40,7 +40,7 @@ impl PeerConnector {
 
     /// Create an SSL stream from a peer to another peer.
     /// Uses the current peer's ip+port and the other peer's public key.
-    /// This ssl stream makes sure a peer sends messages to the interceptor first
+    /// This ssl stream makes sure a peer sends messages to the interceptor first,
     /// instead of sending it straight to the other peer.
     async fn create_ssl_stream(ip: &str, port: u16, pub_key_peer_to: &str) -> SslStream<TcpStream> {
         let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
@@ -99,6 +99,7 @@ impl PeerConnector {
 
             buf.advance(n + 4);
 
+            // HTTP code 101: Switching Protocols
             if response_code != 101 && ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0
             {
                 debug!("Body: {}", String::from_utf8_lossy(&buf).trim());
@@ -116,6 +117,9 @@ impl PeerConnector {
         ssl_stream
     }
 
+    /// Create a request message which wil upgrade the connection between peer and interceptor
+    /// The content is trivial. The Session-Signature gets neglected (dummy value 'a')
+    /// since we removed the handshake verification check in the rippled source code.
     fn format_upgrade_request_content(pub_key_peer_to: &str) -> String {
         format!(
             "\
@@ -187,13 +191,17 @@ impl PeerConnector {
             return;
         }
         let bytes = buf.to_vec();
+
+        // Check if the most significant bit turned on, indicating a compressed message
         if bytes[0] & 0x80 != 0 {
             error!("{:?}", bytes[0]);
             panic!("Received compressed message");
         }
 
+        // Check if any of the 6 most significant bits are turned on, indicating an unknown header
         if bytes[0] & 0xFC != 0 {
-            error!("Unknown version header");
+            error!("{:?}", bytes[0]);
+            panic!("Unknown version header")
         }
 
         // TODO: send the message to the controller
