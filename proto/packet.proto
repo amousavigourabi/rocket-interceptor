@@ -1,0 +1,14 @@
+syntax = "proto3";
+package packet;
+
+service PacketService {
+    rpc SendPacket(Packet) returns (PacketAck);
+}
+
+message Packet {
+    bytes data = 1;
+}
+
+message PacketAck {
+    string message = 1;
+}
