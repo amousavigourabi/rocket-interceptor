@@ -24,23 +24,25 @@ impl PeerConnector {
     /// Returns 2 threads which handle the messages sent over the streams.
     pub async fn connect_peers(
         self,
-        peer1: u16,
-        peer2: u16,
+        peer1_id: u16,
+        peer2_id: u16,
         pub_key1: &str,
         pub_key2: &str,
     ) -> (JoinHandle<()>, JoinHandle<()>) {
         let ssl_stream_1 =
-            Self::create_ssl_stream(self.ip_addr.as_str(), self.base_port + peer1, pub_key2).await;
+            Self::create_ssl_stream(self.ip_addr.as_str(), self.base_port + peer1_id, pub_key2)
+                .await;
         let ssl_stream_2 =
-            Self::create_ssl_stream(self.ip_addr.as_str(), self.base_port + peer2, pub_key1).await;
-        Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1, peer2).await
+            Self::create_ssl_stream(self.ip_addr.as_str(), self.base_port + peer2_id, pub_key1)
+                .await;
+        Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1_id, peer2_id).await
     }
 
     /// Create an SSL stream from a peer to another peer.
     /// Uses the current peer's ip+port and the other peer's public key.
     /// This ssl stream makes sure a peer sends messages to the interceptor first
     /// instead of sending it straight to the other peer.
-    async fn create_ssl_stream(ip: &str, port: u16, pub_key_peer: &str) -> SslStream<TcpStream> {
+    async fn create_ssl_stream(ip: &str, port: u16, pub_key_peer_to: &str) -> SslStream<TcpStream> {
         let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
         let tcp_stream = match TcpStream::connect(socket_address).await {
             Ok(tcp_stream) => tcp_stream,
@@ -55,7 +57,7 @@ impl PeerConnector {
             .await
             .expect("SSL connection failed");
 
-        let content = Self::format_upgrade_request_content(pub_key_peer);
+        let content = Self::format_upgrade_request_content(pub_key_peer_to);
         ssl_stream
             .write_all(content.as_bytes())
             .await
@@ -114,7 +116,7 @@ impl PeerConnector {
         ssl_stream
     }
 
-    fn format_upgrade_request_content(pub_key_peer: &str) -> String {
+    fn format_upgrade_request_content(pub_key_peer_to: &str) -> String {
         format!(
             "\
             GET / HTTP/1.1\r\n\
@@ -124,7 +126,7 @@ impl PeerConnector {
             Public-Key: {}\r\n\
             Session-Signature: a\r\n\
             \r\n",
-            pub_key_peer
+            pub_key_peer_to
         )
     }
 
@@ -133,24 +135,26 @@ impl PeerConnector {
     async fn handle_peer_connections(
         ssl_stream_1: SslStream<TcpStream>,
         ssl_stream_2: SslStream<TcpStream>,
-        peer1: u16,
-        peer2: u16,
+        peer1_id: u16,
+        peer2_id: u16,
     ) -> (JoinHandle<()>, JoinHandle<()>) {
-        let arc_stream1_0 = Arc::new(Mutex::new(ssl_stream_1));
-        let arc_stream2_0 = Arc::new(Mutex::new(ssl_stream_2));
+        let arc_stream_peer1_0 = Arc::new(Mutex::new(ssl_stream_1));
+        let arc_stream_peer2_0 = Arc::new(Mutex::new(ssl_stream_2));
 
-        let arc_stream1_1 = arc_stream1_0.clone();
-        let arc_stream2_1 = arc_stream2_0.clone();
+        let arc_stream_peer1_1 = arc_stream_peer1_0.clone();
+        let arc_stream_peer2_1 = arc_stream_peer1_0.clone();
 
         let thread_1 = tokio::spawn(async move {
             loop {
-                Self::handle_message(&arc_stream1_0, &arc_stream2_0, peer1, peer2).await;
+                Self::handle_message(&arc_stream_peer1_0, &arc_stream_peer2_0, peer1_id, peer2_id)
+                    .await;
             }
         });
 
         let thread_2 = tokio::spawn(async move {
             loop {
-                Self::handle_message(&arc_stream2_1, &arc_stream1_1, peer2, peer1).await;
+                Self::handle_message(&arc_stream_peer2_1, &arc_stream_peer1_1, peer2_id, peer1_id)
+                    .await;
             }
         });
 
@@ -160,14 +164,14 @@ impl PeerConnector {
     /// Handles incoming messages from the 'form' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
     async fn handle_message(
-        from: &Arc<Mutex<SslStream<TcpStream>>>,
-        to: &Arc<Mutex<SslStream<TcpStream>>>,
-        peer_from: u16,
-        peer_to: u16,
+        peer_from_stream: &Arc<Mutex<SslStream<TcpStream>>>,
+        peer_to_stream: &Arc<Mutex<SslStream<TcpStream>>>,
+        peer_from_id: u16,
+        peer_to_id: u16,
     ) {
         let mut buf = BytesMut::with_capacity(64 * 1024);
         buf.resize(64 * 1024, 0);
-        let size = from
+        let size = peer_from_stream
             .lock()
             .await
             .read(buf.as_mut())
@@ -197,36 +201,37 @@ impl PeerConnector {
 
         // For now for testing purposes: peer1 gets delayed for 1000ms with a chance of p=0.3
         // Move the current execution to a tokio thread which will delay and then send the message
-        if peer_from == 1 && thread_rng().gen_bool(0.3) {
-            let to_clone = to.clone();
+        if peer_from_id == 1 && thread_rng().gen_bool(0.3) {
+            let peer_from_stream_clone = peer_to_stream.clone();
             let _delay_thread = tokio::spawn(async move {
-                Self::delay_execution(peer_from, start_time, 1000).await;
-                to_clone
+                Self::delay_execution(peer_from_id, start_time, 1000).await;
+                peer_from_stream_clone
                     .lock()
                     .await
                     .write_all(&buf)
                     .await
                     .expect("Could not write to SSL stream");
-                debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
+                debug!("Forwarded peer message {} -> {}", peer_from_id, peer_to_id)
             });
         }
         // For now: send the raw bytes without processing to the receiver
         else {
-            to.lock()
+            peer_to_stream
+                .lock()
                 .await
                 .write_all(&buf)
                 .await
                 .expect("Could not write to SSL stream");
-            debug!("Forwarded peer message {} -> {}", peer_from, peer_to)
+            debug!("Forwarded peer message {} -> {}", peer_from_id, peer_to_id)
         }
     }
 
     /// Delay execution with respect to a defined starting time
-    async fn delay_execution(peer: u16, start_time: Instant, ms: u64) {
+    async fn delay_execution(peer_id: u16, start_time: Instant, ms: u64) {
         let elapsed_time = start_time.elapsed();
         let delay_duration = Duration::from_millis(ms) - elapsed_time;
 
-        debug!("Delaying peer {} for {} ms", peer, ms);
+        debug!("Delaying peer {} for {} ms", peer_id, ms);
 
         if delay_duration > Duration::new(0, 0) {
             tokio::time::sleep(delay_duration).await;
