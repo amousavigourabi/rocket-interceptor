@@ -13,8 +13,6 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
-/// The lifetime specifier ('a) is needed to make sure that.
-/// the reference to ip_addr stays alive while this object is alive.
 pub struct PeerConnector {
     pub ip_addr: String,
     pub base_port: u16,
