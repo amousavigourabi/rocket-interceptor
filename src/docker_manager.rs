@@ -7,10 +7,12 @@ use std::time::Duration;
 
 use bollard::container::{Config, CreateContainerOptions, RemoveContainerOptions};
 use bollard::exec::{CreateExecOptions, StartExecResults};
+use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
 use bollard::Docker;
 
 use futures_util::stream::StreamExt;
+use futures_util::TryStreamExt;
 use serde::Deserialize;
 
 const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
@@ -98,6 +100,8 @@ impl DockerNetwork {
     /// them using `bollard`. The containers that were started successfully are appended to
     /// the `containers` field in the struct.
     pub async fn initialize_network(&mut self) {
+        self.download_image().await;
+
         let validator_keys = self.generate_keys(self.config.number_of_nodes).await;
         let names_with_keys = self.generate_validator_configs(&validator_keys);
 
@@ -135,6 +139,21 @@ impl DockerNetwork {
                 .await
                 .unwrap();
         }
+    }
+
+    async fn download_image(&mut self) {
+        self.docker
+            .create_image(
+                Some(CreateImageOptions {
+                    from_image: IMAGE,
+                    ..Default::default()
+                }),
+                None,
+                None,
+            )
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap();
     }
 
     async fn start_validator(&self, container: &mut DockerContainer) {
