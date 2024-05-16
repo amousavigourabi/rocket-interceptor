@@ -1,12 +1,14 @@
 use proto::packet_service_client::PacketServiceClient;
 use proto::Packet;
 
-
 pub mod proto {
     tonic::include_proto!("packet");
 }
 
 async fn send_packet(request: tonic::Request<Packet>) -> Result<(), Box<dyn std::error::Error>> {
+    if request.get_ref().data.is_empty() {
+        return Err("Packet data is empty".into());
+    }
     let mut client = PacketServiceClient::connect("http://[::1]:50051").await?;
 
     let response = client.send_packet(request).await?; // we send to controller and are waiting for the response
@@ -46,5 +48,21 @@ mod tests {
 
         // Assert that the result is Ok
         assert!(result.await.is_ok());
+    }
+    #[tokio::test]
+    async fn assert_result_err() {
+        // Prepare a request with invalid data
+        let packet_data: Vec<u8> = vec![]; // Empty data
+        let packet_port: u32 = 2;
+        let request = tonic::Request::new(Packet {
+            data: packet_data,
+            port: packet_port,
+        });
+
+        // Call the async function and obtain the result
+        let result = send_packet(request).await;
+
+        // Assert that the result is not Ok (i.e., Err)
+        assert!(result.is_err());
     }
 }
