@@ -10,8 +10,8 @@ use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
 use bollard::Docker;
 
-use serde::Deserialize;
 use futures_util::stream::StreamExt;
+use serde::Deserialize;
 
 const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
 
