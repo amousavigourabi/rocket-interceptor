@@ -164,7 +164,7 @@ async fn main() -> io::Result<()> {
     // Init docker network
     let network_config = docker_manager::get_config();
     let mut network = docker_manager::DockerNetwork::new(network_config);
-    network.initialize_network();
+    network.initialize_network().await;
 
     // Iterate over every unique validator node pair
     let mut threads = Vec::new();
@@ -195,7 +195,7 @@ async fn main() -> io::Result<()> {
         t.await.expect("Thread failed");
     }
 
-    network.stop_network();
+    network.stop_network().await;
 
     Ok(())
 }

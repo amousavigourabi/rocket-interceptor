@@ -1,12 +1,19 @@
 use log::{debug, warn};
-use serde::Deserialize;
 use std::env::current_dir;
 use std::fs;
 use std::io::Read;
 use std::io::{ErrorKind, Write};
-use std::process::{Command, Stdio};
-use std::thread::sleep;
 use std::time::Duration;
+
+use bollard::container::{Config, CreateContainerOptions, RemoveContainerOptions};
+use bollard::exec::{CreateExecOptions, StartExecResults};
+use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
+use bollard::Docker;
+
+use serde::Deserialize;
+use futures_util::stream::StreamExt;
+
+const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
 
 #[derive(Debug, Deserialize)]
 pub struct NetworkConfig {
@@ -60,8 +67,9 @@ pub struct ValidatorKeyData {
     pub validation_seed: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DockerContainer {
+    pub id: Option<String>,
     pub name: String,
     pub port_peer: u16,
     pub port_ws: u16,
@@ -74,21 +82,23 @@ pub struct DockerContainer {
 pub struct DockerNetwork {
     pub config: NetworkConfig,
     pub containers: Vec<DockerContainer>,
+    docker: Docker,
 }
 
 impl DockerNetwork {
     pub fn new(config: NetworkConfig) -> DockerNetwork {
         DockerNetwork {
-            containers: Vec::new(),
             config,
+            containers: Vec::new(),
+            docker: Docker::connect_with_local_defaults().unwrap(),
         }
     }
 
     /// Initializes the docker network by generating keys for each configured node, and starting
-    /// them using `docker run`. The containers that were started successfully are appended to
+    /// them using `bollard`. The containers that were started successfully are appended to
     /// the `containers` field in the struct.
-    pub fn initialize_network(&mut self) {
-        let validator_keys = self.generate_keys(self.config.number_of_nodes);
+    pub async fn initialize_network(&mut self) {
+        let validator_keys = self.generate_keys(self.config.number_of_nodes).await;
         let names_with_keys = self.generate_validator_configs(&validator_keys);
 
         let base_port_peer = self.config.base_port.unwrap_or(60000);
@@ -97,7 +107,8 @@ impl DockerNetwork {
         let base_port_rpc = self.config.base_port_rpc.unwrap_or(63000);
 
         for (i, (name, keys)) in names_with_keys.iter().enumerate() {
-            let validator_container = DockerContainer {
+            let mut validator_container = DockerContainer {
+                id: None,
                 name: name.clone(),
                 port_peer: base_port_peer + i as u16,
                 port_ws: base_port_ws + i as u16,
@@ -105,73 +116,95 @@ impl DockerNetwork {
                 port_rpc: base_port_rpc + i as u16,
                 key_data: keys.clone(),
             };
-            self.start_validator(&validator_container);
+            self.start_validator(&mut validator_container).await;
+            debug!("Started docker container {}", name.clone());
             self.containers.push(validator_container);
         }
     }
 
-    pub fn stop_network(&self) {
-        Command::new("docker")
-            .arg("stop")
-            .arg(r#"$(docker container list -q)"#)
-            .stdout(Stdio::null())
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .expect("Could not stop container: key_generator");
-    }
-
-    fn start_validator(&self, container: &DockerContainer) {
-        let stat = Command::new("docker")
-            .arg("run")
-            .arg("-d")
-            .arg("--rm")
-            .args(["-p", format!("{}:51235", container.port_peer).as_str()])
-            .args(["-p", format!("{}:6005", container.port_ws).as_str()])
-            .args(["-p", format!("{}:6006", container.port_ws_admin).as_str()])
-            .args(["-p", format!("{}:5005", container.port_rpc).as_str()])
-            .args(["--name", container.name.as_str()])
-            .args([
-                "--mount",
-                format!(
-                    "type=bind,source={}/network/validators/{}/config,target=/config",
-                    current_dir().unwrap().to_str().unwrap(),
-                    container.name.as_str()
+    pub async fn stop_network(&self) {
+        for c in self.containers.iter() {
+            self.docker
+                .remove_container(
+                    c.clone().id.unwrap().as_str(),
+                    Some(RemoveContainerOptions {
+                        force: true,
+                        ..Default::default()
+                    }),
                 )
-                .as_str(),
-            ])
-            .arg("isvanloon/rippled-no-sig-check")
-            .stdout(Stdio::null())
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .expect("Failed to start docker container");
-
-        match stat.code() {
-            Some(0) => {
-                debug!("Started container {} successfully", container.name.as_str())
-            }
-            Some(i) => {
-                panic!("Starting docker container failed, exit code: {}", i)
-            }
-            None => {
-                panic!(
-                    "No exit code when starting container {}",
-                    container.name.as_str()
-                )
-            }
+                .await
+                .unwrap();
         }
     }
 
-    fn stop_container_by_name(&self, name: &str) {
-        Command::new("docker")
-            .arg("stop")
-            .arg(name)
-            .stdout(Stdio::null())
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .expect("Could not stop container: key_generator");
+    async fn start_validator(&self, container: &mut DockerContainer) {
+        let mut port_map = PortMap::new();
+        port_map.insert(
+            String::from("51235/tcp"),
+            Some(vec![PortBinding {
+                host_port: Some(container.port_peer.to_string()),
+                ..Default::default()
+            }]),
+        );
+        port_map.insert(
+            String::from("6005/tcp"),
+            Some(vec![PortBinding {
+                host_port: Some(container.port_ws.to_string()),
+                ..Default::default()
+            }]),
+        );
+        port_map.insert(
+            String::from("6006/tcp"),
+            Some(vec![PortBinding {
+                host_port: Some(container.port_ws_admin.to_string()),
+                ..Default::default()
+            }]),
+        );
+        port_map.insert(
+            String::from("5005/tcp"),
+            Some(vec![PortBinding {
+                host_port: Some(container.port_rpc.to_string()),
+                ..Default::default()
+            }]),
+        );
+
+        let create_options = CreateContainerOptions {
+            name: container.name.as_str(),
+            ..Default::default()
+        };
+
+        let container_config = Config {
+            image: Some(IMAGE),
+            host_config: Some(HostConfig {
+                auto_remove: Some(true),
+                port_bindings: Some(port_map),
+                mounts: Some(vec![Mount {
+                    target: Some(String::from("/config")),
+                    source: Some(format!(
+                        "{}/network/validators/{}/config",
+                        current_dir().unwrap().to_str().unwrap(),
+                        container.name.as_str()
+                    )),
+                    typ: Some(MountTypeEnum::BIND),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let id = self
+            .docker
+            .create_container::<&str, &str>(Some(create_options), container_config)
+            .await
+            .unwrap()
+            .id;
+        self.docker
+            .start_container::<String>(&id, None)
+            .await
+            .unwrap();
+
+        container.id = Some(id.clone());
     }
 
     /// Generates `n` validator keys using a `rippled` instance.
@@ -179,51 +212,85 @@ impl DockerNetwork {
     /// # Panics
     /// This function panics if the JSON response from `rippled` cannot be correctly
     /// deserialized to the `ValidationKeyCreateResponse` struct.
-    fn generate_keys(&self, n: u16) -> Vec<ValidatorKeyData> {
-        Command::new("docker")
-            .arg("run")
-            .arg("-d")
-            .arg("--rm")
-            .args(["--name", "key_generator"])
-            .args([
-                "--mount",
-                format!(
-                    "type=bind,source={}/network/key_generator/config,target=/config",
-                    current_dir().unwrap().to_str().unwrap()
-                )
-                .as_str(),
-            ])
-            .arg("isvanloon/rippled-no-sig-check")
-            .stdout(Stdio::null())
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .expect("Failed to start docker container");
+    async fn generate_keys(&self, n: u16) -> Vec<ValidatorKeyData> {
+        let container_name = String::from("key_generator");
+        let create_options = CreateContainerOptions {
+            name: container_name.as_str(),
+            ..Default::default()
+        };
+
+        let container_config = Config {
+            image: Some(IMAGE),
+            host_config: Some(HostConfig {
+                auto_remove: Some(true),
+                mounts: Some(vec![Mount {
+                    target: Some(String::from("/config")),
+                    source: Some(format!(
+                        "{}/network/{}/config",
+                        current_dir().unwrap().to_str().unwrap(),
+                        container_name.as_str()
+                    )),
+                    typ: Some(MountTypeEnum::BIND),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let id = self
+            .docker
+            .create_container::<&str, &str>(Some(create_options), container_config)
+            .await
+            .unwrap()
+            .id;
+
+        self.docker
+            .start_container::<String>(&id, None)
+            .await
+            .unwrap();
 
         //TODO: Find a better way to wait for the container to finish loading completely
-        sleep(Duration::from_secs(2));
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
         let mut key_vec: Vec<ValidatorKeyData> = Vec::new();
         for _ in 0..n {
-            let cmd_result = Command::new("docker")
-                .arg("exec")
-                .arg("key_generator")
-                .arg("/bin/bash")
-                .arg("-c")
-                .arg(r#"rippled validation_create"#)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .output()
-                .expect("Could not execute command in docker container");
+            let exec = self
+                .docker
+                .create_exec(
+                    &id,
+                    CreateExecOptions {
+                        attach_stdout: Some(true),
+                        cmd: Some(vec!["rippled", "validation_create"]),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap()
+                .id;
+            if let StartExecResults::Attached { mut output, .. } =
+                self.docker.start_exec(&exec, None).await.unwrap()
+            {
+                while let Some(Ok(msg)) = output.next().await {
+                    let json_str = String::from_utf8(msg.as_ref().to_vec()).unwrap();
+                    let validator_key_data: ValidationKeyCreateResponse =
+                        serde_json::from_str(json_str.as_str()).unwrap();
 
-            let json_str = String::from_utf8(cmd_result.stdout).unwrap();
-            let validator_key_data: ValidationKeyCreateResponse =
-                serde_json::from_str(json_str.as_str()).unwrap();
-
-            key_vec.push(validator_key_data.result);
+                    key_vec.push(validator_key_data.result);
+                }
+            }
         }
 
-        self.stop_container_by_name("key_generator");
+        self.docker
+            .remove_container(
+                &id,
+                Some(RemoveContainerOptions {
+                    force: true,
+                    ..Default::default()
+                }),
+            )
+            .await
+            .unwrap();
         key_vec
     }
 
