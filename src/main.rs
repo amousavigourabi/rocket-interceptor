@@ -1,3 +1,5 @@
+mod docker_manager;
+
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
@@ -6,15 +8,12 @@ use std::sync::Arc;
 use bytes::{Buf, BytesMut};
 use log::*;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
-use std::env::current_dir;
-use std::env::set_var;
-use std::process::{Command, Stdio};
+use std::env;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::macros::support::Pin;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
-use tokio::time::sleep;
 use tokio_openssl::SslStream;
 
 async fn connect_to_peer(ip: &str, port: u16, public_key: &str) -> SslStream<TcpStream> {
@@ -158,45 +157,48 @@ async fn handle_conn(node1: SslStream<TcpStream>, node2: SslStream<TcpStream>) {
     t2.await.expect("Thread 2 failed.");
 }
 
-async fn start_container(name: &str, port: u16) {
-    debug!("Starting docker container: {}", name);
-    Command::new("docker")
-        .arg("run")
-        .arg("-d")
-        .arg("-p")
-        .arg(format!("{}:51235", port))
-        .arg("--name")
-        .arg(name)
-        .arg("--mount")
-        .arg(format!(
-            "type=bind,source={}/network/{}/config,target=/config",
-            current_dir().unwrap().to_str().unwrap(),
-            name
-        ))
-        .arg("isvanloon/rippled-no-sig-check")
-        .stdout(Stdio::null())
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect("Failed to start docker container");
-
-    sleep(Duration::from_secs(2)).await;
-}
-
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    set_var("RUST_LOG", "DEBUG");
+    env::set_var("RUST_LOG", "DEBUG");
     env_logger::init();
 
-    let n1_public_key = "n9JAC3PDvNcLkR6uCRWvrBMQDs4UFR2UqhL5yU8xdDcdhTfqUxci";
-    let n2_public_key = "n9KWgTyg72yf1AdDoEM3GaDFUPaZNK3uf66uoVpMZeNnGegC9yz2";
+    // Init docker network
+    let network_config = docker_manager::get_config();
+    let mut network = docker_manager::DockerNetwork::new(network_config);
+    network.initialize_network().await;
 
-    start_container("validator_1", 6001).await;
-    start_container("validator_2", 6002).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let ssl_stream1 = connect_to_peer("127.0.0.1", 6001, n2_public_key).await;
-    let ssl_stream2 = connect_to_peer("127.0.0.1", 6002, n1_public_key).await;
+    // Iterate over every unique validator node pair and create a thread for each
+    let mut threads = Vec::new();
+    for (i, container1) in network.containers.iter().enumerate() {
+        for container2 in &network.containers[(i + 1)..network.containers.len()] {
+            let ssl_stream1 = connect_to_peer(
+                "127.0.0.1",
+                container1.port_peer,
+                container2.key_data.validation_public_key.as_str(),
+            )
+            .await;
+            let ssl_stream2 = connect_to_peer(
+                "127.0.0.1",
+                container2.port_peer,
+                container1.key_data.validation_public_key.as_str(),
+            )
+            .await;
 
-    handle_conn(ssl_stream1, ssl_stream2).await;
+            let t = tokio::spawn(async move {
+                handle_conn(ssl_stream1, ssl_stream2).await;
+            });
+            threads.push(t);
+        }
+    }
+
+    // Wait for all threads to exit (due to error)
+    for t in threads {
+        t.await.expect("Thread failed");
+    }
+
+    network.stop_network().await;
+
     Ok(())
 }
