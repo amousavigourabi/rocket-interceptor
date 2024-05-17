@@ -144,7 +144,7 @@ impl PeerConnector {
         let arc_stream_peer2_0 = Arc::new(Mutex::new(ssl_stream_2));
 
         let arc_stream_peer1_1 = arc_stream_peer1_0.clone();
-        let arc_stream_peer2_1 = arc_stream_peer1_0.clone();
+        let arc_stream_peer2_1 = arc_stream_peer2_0.clone();
 
         let thread_1 = tokio::spawn(async move {
             loop {
