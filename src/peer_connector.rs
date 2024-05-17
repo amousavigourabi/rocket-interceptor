@@ -32,7 +32,7 @@ impl PeerConnector {
         let ssl_stream_1 =
             Self::create_ssl_stream(self.ip_addr.as_str(), peer1_port, pub_key2).await;
         let ssl_stream_2 =
-            Self::create_ssl_stream(self.ip_addr.as_str(), peer1_port, pub_key1).await;
+            Self::create_ssl_stream(self.ip_addr.as_str(), peer2_port, pub_key1).await;
         Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1_port, peer2_port).await
     }
 
