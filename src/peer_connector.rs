@@ -173,7 +173,7 @@ impl PeerConnector {
         (thread_1, thread_2)
     }
 
-    /// Handles incoming messages from the 'form' stream to the 'to' stream.
+    /// Handles incoming messages from the 'from' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
     async fn handle_message(
         peer_from_stream: &Arc<Mutex<SslStream<TcpStream>>>,
@@ -218,10 +218,10 @@ impl PeerConnector {
         // For now for testing purposes: peer1 gets delayed for 1000ms with a chance of p=0.3
         // Move the current execution to a tokio thread which will delay and then send the message
         if peer_from_port == 60001 && thread_rng().gen_bool(0.3) {
-            let peer_from_stream_clone = peer_to_stream.clone();
+            let peer_to_stream_clone = peer_to_stream.clone();
             let _delay_thread = tokio::spawn(async move {
                 Self::delay_execution(peer_from_port, start_time, 1000).await;
-                peer_from_stream_clone
+                peer_to_stream_clone
                     .lock()
                     .await
                     .write_all(&buf)
