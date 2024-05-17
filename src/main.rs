@@ -25,12 +25,15 @@ async fn main() -> io::Result<()> {
     let mut threads = Vec::new();
     for (i, container1) in network.containers.iter().enumerate() {
         for container2 in &network.containers[(i + 1)..network.containers.len()] {
-            let (t1, t2) = peer_connector.clone().connect_peers(
-                container1.port_peer,
-                container2.port_peer,
-                container1.key_data.validation_public_key.as_str(),
-                container2.key_data.validation_public_key.as_str(),
-            ).await;
+            let (t1, t2) = peer_connector
+                .clone()
+                .connect_peers(
+                    container1.port_peer,
+                    container2.port_peer,
+                    container1.key_data.validation_public_key.as_str(),
+                    container2.key_data.validation_public_key.as_str(),
+                )
+                .await;
 
             threads.push(t1);
             threads.push(t2);
