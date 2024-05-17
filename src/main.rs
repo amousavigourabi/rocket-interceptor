@@ -169,7 +169,7 @@ async fn main() -> io::Result<()> {
 
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // Iterate over every unique validator node pair
+    // Iterate over every unique validator node pair and create a thread for each
     let mut threads = Vec::new();
     for (i, container1) in network.containers.iter().enumerate() {
         for container2 in &network.containers[(i + 1)..network.containers.len()] {
