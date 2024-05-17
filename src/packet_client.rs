@@ -10,7 +10,7 @@ async fn send_packet(request: tonic::Request<Packet>) -> Result<(), Box<dyn std:
         return Err("Packet data is empty".into());
     }
 
-    let port = match request.get_ref().port {
+    match request.get_ref().port {
         u32::MAX => return Err("Port not set properly".into()),
         port => port,
     };
@@ -20,10 +20,6 @@ async fn send_packet(request: tonic::Request<Packet>) -> Result<(), Box<dyn std:
     let response = client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
     println!("Response: {:?}", response);
     // seperate by bytes, port, message
-
-    if response.action < 0 {
-        return Err("Received a negative action in the response".into());
-    }
 
     Ok(())
 }
