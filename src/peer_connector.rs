@@ -13,18 +13,17 @@ use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
+use crate::packet_client::PacketClient;
 
 #[derive(Clone)]
 pub struct PeerConnector {
     pub ip_addr: String,
-    pub client: Arc<Mutex<packet_client::PacketClient>>,
 }
 
 impl PeerConnector {
-    pub fn new(ip_addr: String, client: packet_client::PacketClient) -> Self {
+    pub fn new(ip_addr: String) -> Self {
         Self {
             ip_addr,
-            client: Arc::new(Mutex::new(client)),
         }
     }
     /// Connect 2 peers using their id's and public keys.
@@ -32,6 +31,7 @@ impl PeerConnector {
     /// Returns 2 threads which handle the messages sent over the streams.
     pub async fn connect_peers(
         self,
+        client: Arc<Mutex<packet_client::PacketClient>>,
         peer1_port: u16,
         peer2_port: u16,
         pub_key1: &str,
@@ -41,7 +41,7 @@ impl PeerConnector {
             Self::create_ssl_stream(self.ip_addr.as_str(), peer1_port, pub_key2).await;
         let ssl_stream_2 =
             Self::create_ssl_stream(self.ip_addr.as_str(), peer2_port, pub_key1).await;
-        Self::handle_peer_connections(&self, ssl_stream_1, ssl_stream_2, peer1_port, peer2_port)
+        Self::handle_peer_connections(client, ssl_stream_1, ssl_stream_2, peer1_port, peer2_port)
             .await
     }
 
@@ -144,7 +144,7 @@ impl PeerConnector {
     /// Handle the connection between 2 peers, while keeping track of the peers' numbers
     /// Returns 2 threads which continuously handle incoming messages
     async fn handle_peer_connections(
-        &self,
+        client: Arc<Mutex<PacketClient>>,
         ssl_stream_1: SslStream<TcpStream>,
         ssl_stream_2: SslStream<TcpStream>,
         peer1_port: u16,
@@ -156,31 +156,30 @@ impl PeerConnector {
         let arc_stream_peer1_1 = arc_stream_peer1_0.clone();
         let arc_stream_peer2_1 = arc_stream_peer2_0.clone();
 
-        let self_clone_1 = self.clone();
-        let self_clone_2 = self.clone();
-
+        let client1 = Arc::clone(&client);
         let thread_1 = tokio::spawn(async move {
             loop {
-                self_clone_1
-                    .handle_message(
-                        &arc_stream_peer1_0,
-                        &arc_stream_peer2_0,
-                        peer1_port,
-                        peer2_port,
-                    )
+                Self::handle_message(
+                    client1.clone(),
+                    &arc_stream_peer1_0,
+                    &arc_stream_peer2_0,
+                    peer1_port,
+                    peer2_port,
+                )
                     .await;
             }
         });
 
+        let client2 = Arc::clone(&client);
         let thread_2 = tokio::spawn(async move {
             loop {
-                self_clone_2
-                    .handle_message(
-                        &arc_stream_peer2_1,
-                        &arc_stream_peer1_1,
-                        peer2_port,
-                        peer1_port,
-                    )
+                Self::handle_message(
+                    client2.clone(),
+                    &arc_stream_peer2_1,
+                    &arc_stream_peer1_1,
+                    peer2_port,
+                    peer1_port,
+                )
                     .await;
             }
         });
@@ -191,7 +190,7 @@ impl PeerConnector {
     /// Handles incoming messages from the 'from' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
     async fn handle_message(
-        &self,
+        client: Arc<Mutex<PacketClient>>,
         peer_from_stream: &Arc<Mutex<SslStream<TcpStream>>>,
         peer_to_stream: &Arc<Mutex<SslStream<TcpStream>>>,
         peer_from_port: u16,
@@ -228,8 +227,7 @@ impl PeerConnector {
             panic!("Unknown version header")
         }
 
-        let data = self
-            .client
+        let data = client
             .lock()
             .await
             .send_packet(bytes, u32::from(peer_from_port), u32::from(peer_to_port))
