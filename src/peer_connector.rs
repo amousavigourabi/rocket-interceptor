@@ -173,7 +173,8 @@ impl PeerConnector {
         let start_time = Instant::now();
 
         // Temporary to pass pipeline with clippy
-        let _ = peer_from_port + peer_to_port;
+        let _ = peer_from_port;
+        let _ = peer_to_port;
 
         buf.resize(size, 0);
         if size == 0 {
