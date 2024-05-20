@@ -38,10 +38,11 @@ impl PeerConnector {
         pub_key2: &str,
     ) -> (JoinHandle<()>, JoinHandle<()>) {
         let ssl_stream_1 =
-            Self::create_ssl_stream( self.ip_addr.as_str(), peer1_port, pub_key2).await;
+            Self::create_ssl_stream(self.ip_addr.as_str(), peer1_port, pub_key2).await;
         let ssl_stream_2 =
             Self::create_ssl_stream(self.ip_addr.as_str(), peer2_port, pub_key1).await;
-        Self::handle_peer_connections(&self, ssl_stream_1, ssl_stream_2, peer1_port, peer2_port).await
+        Self::handle_peer_connections(&self, ssl_stream_1, ssl_stream_2, peer1_port, peer2_port)
+            .await
     }
 
     /// Create an SSL stream from a peer to another peer.
@@ -160,24 +161,26 @@ impl PeerConnector {
 
         let thread_1 = tokio::spawn(async move {
             loop {
-                self_clone_1.handle_message(
-                    &arc_stream_peer1_0,
-                    &arc_stream_peer2_0,
-                    peer1_port,
-                    peer2_port,
-                )
+                self_clone_1
+                    .handle_message(
+                        &arc_stream_peer1_0,
+                        &arc_stream_peer2_0,
+                        peer1_port,
+                        peer2_port,
+                    )
                     .await;
             }
         });
 
         let thread_2 = tokio::spawn(async move {
             loop {
-                self_clone_2.handle_message(
-                    &arc_stream_peer2_1,
-                    &arc_stream_peer1_1,
-                    peer2_port,
-                    peer1_port,
-                )
+                self_clone_2
+                    .handle_message(
+                        &arc_stream_peer2_1,
+                        &arc_stream_peer1_1,
+                        peer2_port,
+                        peer1_port,
+                    )
                     .await;
             }
         });
@@ -225,7 +228,13 @@ impl PeerConnector {
             panic!("Unknown version header")
         }
 
-        let data = self.client.lock().await.send_packet(bytes, u32::from(peer_from_port)).await.unwrap();
+        let data = self
+            .client
+            .lock()
+            .await
+            .send_packet(bytes, u32::from(peer_from_port), u32::from(peer_to_port))
+            .await
+            .unwrap();
 
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
