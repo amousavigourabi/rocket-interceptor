@@ -1,15 +1,11 @@
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
-use rand::prelude::*;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
@@ -140,33 +136,18 @@ impl PeerConnector {
         peer1_port: u16,
         peer2_port: u16,
     ) -> (JoinHandle<()>, JoinHandle<()>) {
-        let arc_stream_peer1_0 = Arc::new(Mutex::new(ssl_stream_1));
-        let arc_stream_peer2_0 = Arc::new(Mutex::new(ssl_stream_2));
-
-        let arc_stream_peer1_1 = arc_stream_peer1_0.clone();
-        let arc_stream_peer2_1 = arc_stream_peer2_0.clone();
+        let (mut r1, mut w1) = tokio::io::split(ssl_stream_1);
+        let (mut r2, mut w2) = tokio::io::split(ssl_stream_2);
 
         let thread_1 = tokio::spawn(async move {
             loop {
-                Self::handle_message(
-                    &arc_stream_peer1_0,
-                    &arc_stream_peer2_0,
-                    peer1_port,
-                    peer2_port,
-                )
-                .await;
+                Self::handle_message(&mut r1, &mut w2, peer1_port, peer2_port).await;
             }
         });
 
         let thread_2 = tokio::spawn(async move {
             loop {
-                Self::handle_message(
-                    &arc_stream_peer2_1,
-                    &arc_stream_peer1_1,
-                    peer2_port,
-                    peer1_port,
-                )
-                .await;
+                Self::handle_message(&mut r2, &mut w1, peer2_port, peer1_port).await;
             }
         });
 
@@ -176,22 +157,17 @@ impl PeerConnector {
     /// Handles incoming messages from the 'from' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
     async fn handle_message(
-        peer_from_stream: &Arc<Mutex<SslStream<TcpStream>>>,
-        peer_to_stream: &Arc<Mutex<SslStream<TcpStream>>>,
+        peer_from_stream: &mut ReadHalf<SslStream<TcpStream>>,
+        peer_to_stream: &mut WriteHalf<SslStream<TcpStream>>,
         peer_from_port: u16,
         peer_to_port: u16,
     ) {
         let mut buf = BytesMut::with_capacity(64 * 1024);
         buf.resize(64 * 1024, 0);
         let size = peer_from_stream
-            .lock()
-            .await
             .read(buf.as_mut())
             .await
             .expect("Could not read from SSL stream");
-
-        // This is used to make sure we exclude execution time when delaying messages
-        let start_time = Instant::now();
 
         buf.resize(size, 0);
         if size == 0 {
@@ -218,6 +194,7 @@ impl PeerConnector {
             panic!("Message size too large");
         }
 
+        // TODO: panics sometimes
         if buf.len() < 6 + payload_size {
             panic!("Buffer is too short");
         }
@@ -226,51 +203,14 @@ impl PeerConnector {
 
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
-
-        // For now for testing purposes: peer1 gets delayed for 1000ms with a chance of p=0.3
-        // Move the current execution to a tokio thread which will delay and then send the message
-        if peer_from_port == 60001 && thread_rng().gen_bool(0.3) {
-            let peer_to_stream_clone = peer_to_stream.clone();
-            let _delay_thread = tokio::spawn(async move {
-                Self::delay_execution(peer_from_port, start_time, 1000).await;
-                peer_to_stream_clone
-                    .lock()
-                    .await
-                    .write_all(&buf)
-                    .await
-                    .expect("Could not write to SSL stream");
-                debug!(
-                    "Forwarded peer message {} -> {}",
-                    peer_from_port, peer_to_port
-                );
-                buf.advance(payload_size + 6);
-            });
-        }
-        // For now: send the raw bytes without processing to the receiver
-        else {
-            peer_to_stream
-                .lock()
-                .await
-                .write_all(&message)
-                .await
-                .expect("Could not write to SSL stream");
-            debug!(
-                "Forwarded peer message {} -> {}",
-                peer_from_port, peer_to_port
-            );
-            buf.advance(payload_size + 6);
-        }
-    }
-
-    /// Delay execution with respect to a defined starting time
-    async fn delay_execution(peer_id: u16, start_time: Instant, ms: u64) {
-        let elapsed_time = start_time.elapsed();
-        let delay_duration = Duration::from_millis(ms) - elapsed_time;
-
-        debug!("Delaying peer {} for {} ms", peer_id, ms);
-
-        if delay_duration > Duration::new(0, 0) {
-            tokio::time::sleep(delay_duration).await;
-        }
+        peer_to_stream
+            .write_all(&message)
+            .await
+            .expect("Could not write to SSL stream");
+        debug!(
+            "Forwarded peer message {} -> {}",
+            peer_from_port, peer_to_port
+        );
+        buf.advance(payload_size + 6);
     }
 }
