@@ -19,7 +19,7 @@ const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
 
 #[derive(Debug, Deserialize)]
 pub struct NetworkConfig {
-    base_port: Option<u16>,
+    pub base_port: Option<u16>,
     base_port_ws: Option<u16>,
     base_port_ws_admin: Option<u16>,
     base_port_rpc: Option<u16>,
