@@ -5,15 +5,20 @@ pub mod proto {
     tonic::include_proto!("packet");
 }
 
-async fn send_packet(request: tonic::Request<Packet>) -> Result<(), Box<dyn std::error::Error>> {
-    if request.get_ref().data.is_empty() {
+pub(crate) async fn send_packet(packet_data: Vec<u8>, packet_port: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    if packet_data.is_empty() {
         return Err("Packet data is empty".into());
     }
 
-    match request.get_ref().port {
+    match packet_port {
         u32::MAX => return Err("Port not set properly".into()),
         port => port,
     };
+
+    let request = tonic::Request::new(Packet {
+        data: packet_data,
+        port: packet_port,
+    });
 
     let mut client = PacketServiceClient::connect("http://[::1]:50051").await?;
 
@@ -21,18 +26,14 @@ async fn send_packet(request: tonic::Request<Packet>) -> Result<(), Box<dyn std:
     println!("Response: {:?}", response);
     // seperate by bytes, port, message
 
-    Ok(())
+    Ok(response.data)
 }
 
 #[tokio::main]
 async fn main() {
     let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     let packet_port: u32 = 2;
-    let request = tonic::Request::new(Packet {
-        data: packet_data,
-        port: packet_port,
-    });
-    if let Err(err) = send_packet(request).await {
+    if let Err(err) = send_packet(packet_data, packet_port).await {
         eprintln!("Error: {}", err);
         std::process::exit(1);
     }

@@ -1,3 +1,5 @@
+mod packet_client;
+
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
@@ -126,9 +128,12 @@ async fn peer_forward_msg(
     if bytes[0] & 0xFC != 0 {
         error!("Unknown version header");
     }
+
+    let data = packet_client::send_packet(bytes, 2).await.unwrap();
+
     to.lock()
         .await
-        .write_all(&buf)
+        .write_all(&data)
         .await
         .expect("Could not write to SSL stream");
 }
