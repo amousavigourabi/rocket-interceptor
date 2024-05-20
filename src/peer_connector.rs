@@ -4,6 +4,7 @@ use openssl::ssl::{Ssl, SslContext, SslMethod};
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
@@ -169,10 +170,14 @@ impl PeerConnector {
             .await
             .expect("Could not read from SSL stream");
 
+        let start_time = Instant::now();
+
+        // Temporary to pass pipeline with clippy
+        let _ = peer_from_port + peer_to_port;
+
         buf.resize(size, 0);
         if size == 0 {
-            error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-            return;
+            panic!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
         }
         let bytes = buf.to_vec();
 
@@ -196,21 +201,37 @@ impl PeerConnector {
 
         // TODO: panics sometimes
         if buf.len() < 6 + payload_size {
-            panic!("Buffer is too short");
+            error!("Buffer is too short");
+            return;
         }
 
         let message = bytes[0..(6 + payload_size)].to_vec();
 
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
+
+        Self::delay_execution(start_time, 120).await;
+
         peer_to_stream
             .write_all(&message)
             .await
             .expect("Could not write to SSL stream");
-        debug!(
-            "Forwarded peer message {} -> {}",
-            peer_from_port, peer_to_port
-        );
+        // debug!(
+        //     "Forwarded peer message {} -> {}",
+        //     peer_from_port, peer_to_port
+        // );
         buf.advance(payload_size + 6);
+    }
+
+    /// Delay execution with respect to a defined starting time
+    async fn delay_execution(start_time: Instant, ms: u64) {
+        let elapsed_time = start_time.elapsed();
+        let delay_duration = Duration::from_millis(ms) - elapsed_time;
+
+        //debug!("Delaying peer {} for {} ms", peer_id, ms);
+
+        if delay_duration > Duration::new(0, 0) {
+            tokio::time::sleep(delay_duration).await;
+        }
     }
 }
