@@ -54,6 +54,7 @@ tests:
 docs:
   stage: docs
   needs: ["tests"]
+  extends: .install_dependencies
   script:
     - cargo doc
     - mv target/doc public

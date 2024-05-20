@@ -5,10 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "test"
-path = "src/packet_client.rs"
-
 [dependencies]
 tokio = { version = "1.37.0", features = ["full"] }
 openssl = "0.10.64"
@@ -19,6 +15,12 @@ sha2 = "0.11.0-pre.3"
 tokio-openssl = "0.6.4"
 httparse = "1.8.0"
 env_logger = "0.11.3"
+serde = { version = "1.0.201", features = ["std", "derive"] }
+toml = "0.8.12"
+serde_json = "1.0.117"
+bollard = "0.16.1"
+futures-util = "0.3.30"
+rand = "0.9.0-alpha.1"
 tonic = "0.11.0"
 prost = "0.12.4"
 

@@ -1,0 +1,5 @@
+base_port = 60000
+base_port_ws = 61000
+base_port_ws_admin = 62000
+base_port_rpc = 63000
+number_of_nodes = 2
