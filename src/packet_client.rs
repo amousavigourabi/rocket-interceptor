@@ -48,27 +48,21 @@ mod tests {
         // Call the async function
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let packet_port: u32 = 2;
-        let request = tonic::Request::new(Packet {
-            data: packet_data,
-            port: packet_port,
-        });
-        let result = send_packet(request);
+
+        // Call the async function and obtain the result
+        let result = send_packet(packet_data, packet_port).await;
 
         // Assert that the result is Ok
-        assert!(result.await.is_ok());
+        assert!(result.is_ok());
     }
     #[tokio::test]
     async fn assert_empty_bytes() {
         // Prepare a request with invalid data
         let packet_data: Vec<u8> = vec![]; // Empty data
         let packet_port: u32 = 2;
-        let request = tonic::Request::new(Packet {
-            data: packet_data,
-            port: packet_port,
-        });
 
         // Call the async function and obtain the result
-        let result = send_packet(request).await;
+        let result = send_packet(packet_data, packet_port).await;
 
         // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
@@ -79,13 +73,9 @@ mod tests {
         // Prepare a request with invalid data
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Empty data
         let packet_port: u32 = u32::MAX;
-        let request = tonic::Request::new(Packet {
-            data: packet_data,
-            port: packet_port,
-        });
 
         // Call the async function and obtain the result
-        let result = send_packet(request).await;
+        let result = send_packet(packet_data, packet_port).await;
 
         // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
