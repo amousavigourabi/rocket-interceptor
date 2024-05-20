@@ -158,7 +158,7 @@ impl PeerConnector {
         let thread_1 = tokio::spawn(async move {
             loop {
                 Self::handle_message(
-                    client1.clone(),
+                    client1.as_ref(),
                     &arc_stream_peer1_0,
                     &arc_stream_peer2_0,
                     peer1_port,
@@ -172,7 +172,7 @@ impl PeerConnector {
         let thread_2 = tokio::spawn(async move {
             loop {
                 Self::handle_message(
-                    client2.clone(),
+                    client2.as_ref(),
                     &arc_stream_peer2_1,
                     &arc_stream_peer1_1,
                     peer2_port,
@@ -188,7 +188,7 @@ impl PeerConnector {
     /// Handles incoming messages from the 'from' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
     async fn handle_message(
-        client: Arc<Mutex<PacketClient>>,
+        client: &Mutex<PacketClient>,
         peer_from_stream: &Arc<Mutex<SslStream<TcpStream>>>,
         peer_to_stream: &Arc<Mutex<SslStream<TcpStream>>>,
         peer_from_port: u16,

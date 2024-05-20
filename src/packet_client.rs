@@ -42,7 +42,7 @@ impl PacketClient {
         });
 
         let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
-        println!("Response: {:?}", response);
+        debug!("Response: {:?}", response);
 
         Ok(response.data)
     }
