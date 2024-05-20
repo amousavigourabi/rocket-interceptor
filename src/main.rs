@@ -15,12 +15,11 @@ async fn main() -> io::Result<()> {
     let network_config = docker_manager::get_config();
     let mut network = docker_manager::DockerNetwork::new(network_config);
     network.initialize_network().await;
+    let client = packet_client::PacketClient::new().await.unwrap();
 
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let peer_connector = PeerConnector {
-        ip_addr: "127.0.0.1".to_string(),
-    };
+    let peer_connector = PeerConnector::new("127.0.0.1".to_string(), client);
 
     // Iterate over every unique validator node pair and create a thread for each
     let mut threads = Vec::new();
