@@ -19,11 +19,7 @@ async fn main() -> io::Result<()> {
     network.initialize_network().await;
     let client = match packet_client::PacketClient::new().await {
         Ok(client) => Arc::new(Mutex::new(client)),
-        Err(e) => {
-            // Handle the error here. For example, you can log the error and exit the program.
-            eprintln!("Failed to create PacketClient: {}", e);
-            std::process::exit(1);
-        }
+        error => panic!("Error creating client: {:?}", error),
     };
 
     tokio::time::sleep(Duration::from_secs(3)).await;

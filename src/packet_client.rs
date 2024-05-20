@@ -1,3 +1,4 @@
+use log::debug;
 use proto::packet_service_client::PacketServiceClient;
 use proto::Packet;
 
@@ -5,6 +6,7 @@ pub mod proto {
     tonic::include_proto!("packet");
 }
 
+#[derive(Debug)]
 pub struct PacketClient {
     pub client: PacketServiceClient<tonic::transport::Channel>,
 }
