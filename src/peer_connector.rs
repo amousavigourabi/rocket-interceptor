@@ -1,4 +1,5 @@
 use crate::packet_client;
+use crate::packet_client::PacketClient;
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
@@ -13,7 +14,6 @@ use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
-use crate::packet_client::PacketClient;
 
 #[derive(Clone)]
 pub struct PeerConnector {
@@ -22,9 +22,7 @@ pub struct PeerConnector {
 
 impl PeerConnector {
     pub fn new(ip_addr: String) -> Self {
-        Self {
-            ip_addr,
-        }
+        Self { ip_addr }
     }
     /// Connect 2 peers using their id's and public keys.
     /// Established SSL streams between the peers.
@@ -166,7 +164,7 @@ impl PeerConnector {
                     peer1_port,
                     peer2_port,
                 )
-                    .await;
+                .await;
             }
         });
 
@@ -180,7 +178,7 @@ impl PeerConnector {
                     peer2_port,
                     peer1_port,
                 )
-                    .await;
+                .await;
             }
         });
 
