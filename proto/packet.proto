@@ -13,6 +13,5 @@ message Packet {
 
 message PacketAck {
     bytes data = 1;
-    
     uint32 action = 3;
 }
