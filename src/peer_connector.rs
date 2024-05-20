@@ -212,6 +212,18 @@ impl PeerConnector {
             panic!("Unknown version header")
         }
 
+        let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
+
+        if payload_size > 64 * 1024 * 1024 {
+            panic!("Message size too large");
+        }
+
+        if buf.len() < 6 + payload_size {
+            panic!("Buffer is too short");
+        }
+
+        let message = bytes[0..(6 + payload_size)].to_vec();
+
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
 
@@ -230,7 +242,8 @@ impl PeerConnector {
                 debug!(
                     "Forwarded peer message {} -> {}",
                     peer_from_port, peer_to_port
-                )
+                );
+                buf.advance(payload_size + 6);
             });
         }
         // For now: send the raw bytes without processing to the receiver
@@ -238,13 +251,14 @@ impl PeerConnector {
             peer_to_stream
                 .lock()
                 .await
-                .write_all(&buf)
+                .write_all(&message)
                 .await
                 .expect("Could not write to SSL stream");
             debug!(
                 "Forwarded peer message {} -> {}",
                 peer_from_port, peer_to_port
-            )
+            );
+            buf.advance(payload_size + 6);
         }
     }
 
