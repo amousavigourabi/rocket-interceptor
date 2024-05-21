@@ -1,3 +1,5 @@
+use crate::packet_client;
+use crate::packet_client::PacketClient;
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
@@ -19,11 +21,15 @@ pub struct PeerConnector {
 }
 
 impl PeerConnector {
+    pub fn new(ip_addr: String) -> Self {
+        Self { ip_addr }
+    }
     /// Connect 2 peers using their id's and public keys.
     /// Established SSL streams between the peers.
     /// Returns 2 threads which handle the messages sent over the streams.
     pub async fn connect_peers(
         self,
+        client: Arc<Mutex<packet_client::PacketClient>>,
         peer1_port: u16,
         peer2_port: u16,
         pub_key1: &str,
@@ -33,7 +39,8 @@ impl PeerConnector {
             Self::create_ssl_stream(self.ip_addr.as_str(), peer1_port, pub_key2).await;
         let ssl_stream_2 =
             Self::create_ssl_stream(self.ip_addr.as_str(), peer2_port, pub_key1).await;
-        Self::handle_peer_connections(ssl_stream_1, ssl_stream_2, peer1_port, peer2_port).await
+        Self::handle_peer_connections(client, ssl_stream_1, ssl_stream_2, peer1_port, peer2_port)
+            .await
     }
 
     /// Create an SSL stream from a peer to another peer.
@@ -135,6 +142,7 @@ impl PeerConnector {
     /// Handle the connection between 2 peers, while keeping track of the peers' numbers
     /// Returns 2 threads which continuously handle incoming messages
     async fn handle_peer_connections(
+        client: Arc<Mutex<PacketClient>>,
         ssl_stream_1: SslStream<TcpStream>,
         ssl_stream_2: SslStream<TcpStream>,
         peer1_port: u16,
@@ -146,9 +154,11 @@ impl PeerConnector {
         let arc_stream_peer1_1 = arc_stream_peer1_0.clone();
         let arc_stream_peer2_1 = arc_stream_peer2_0.clone();
 
+        let client1 = Arc::clone(&client);
         let thread_1 = tokio::spawn(async move {
             loop {
                 Self::handle_message(
+                    client1.as_ref(),
                     &arc_stream_peer1_0,
                     &arc_stream_peer2_0,
                     peer1_port,
@@ -158,9 +168,11 @@ impl PeerConnector {
             }
         });
 
+        let client2 = Arc::clone(&client);
         let thread_2 = tokio::spawn(async move {
             loop {
                 Self::handle_message(
+                    client2.as_ref(),
                     &arc_stream_peer2_1,
                     &arc_stream_peer1_1,
                     peer2_port,
@@ -176,6 +188,7 @@ impl PeerConnector {
     /// Handles incoming messages from the 'from' stream to the 'to' stream.
     /// Utilizes the controller module to determine new packet contents and action
     async fn handle_message(
+        client: &Mutex<PacketClient>,
         peer_from_stream: &Arc<Mutex<SslStream<TcpStream>>>,
         peer_to_stream: &Arc<Mutex<SslStream<TcpStream>>>,
         peer_from_port: u16,
@@ -212,6 +225,13 @@ impl PeerConnector {
             panic!("Unknown version header")
         }
 
+        let data = client
+            .lock()
+            .await
+            .send_packet(bytes, u32::from(peer_from_port), u32::from(peer_to_port))
+            .await
+            .unwrap();
+
         // TODO: send the message to the controller
         // TODO: use returned information for further execution
 
@@ -224,7 +244,7 @@ impl PeerConnector {
                 peer_to_stream_clone
                     .lock()
                     .await
-                    .write_all(&buf)
+                    .write_all(&data)
                     .await
                     .expect("Could not write to SSL stream");
                 debug!(
@@ -238,7 +258,7 @@ impl PeerConnector {
             peer_to_stream
                 .lock()
                 .await
-                .write_all(&buf)
+                .write_all(&data)
                 .await
                 .expect("Could not write to SSL stream");
             debug!(
