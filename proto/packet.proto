@@ -1,0 +1,17 @@
+syntax = "proto3";
+package packet;
+
+service PacketService {
+    rpc SendPacket(Packet) returns (PacketAck);
+}
+
+message Packet {
+    bytes data = 1;
+    uint32 from_port = 2;
+    uint32 to_port = 3;
+}
+
+message PacketAck {
+    bytes data = 1;
+    uint32 action = 2;
+}
