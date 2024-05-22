@@ -3,13 +3,12 @@ use crate::packet_client::PacketClient;
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
-use rand::prelude::*;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+//use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -148,37 +147,22 @@ impl PeerConnector {
         peer1_port: u16,
         peer2_port: u16,
     ) -> (JoinHandle<()>, JoinHandle<()>) {
-        let arc_stream_peer1_0 = Arc::new(Mutex::new(ssl_stream_1));
-        let arc_stream_peer2_0 = Arc::new(Mutex::new(ssl_stream_2));
-
-        let arc_stream_peer1_1 = arc_stream_peer1_0.clone();
-        let arc_stream_peer2_1 = arc_stream_peer2_0.clone();
+        let (mut r1, mut w1) = tokio::io::split(ssl_stream_1);
+        let (mut r2, mut w2) = tokio::io::split(ssl_stream_2);
 
         let client1 = Arc::clone(&client);
         let thread_1 = tokio::spawn(async move {
             loop {
-                Self::handle_message(
-                    client1.as_ref(),
-                    &arc_stream_peer1_0,
-                    &arc_stream_peer2_0,
-                    peer1_port,
-                    peer2_port,
-                )
-                .await;
+                Self::handle_message(client1.as_ref(), &mut r1, &mut w2, peer1_port, peer2_port)
+                    .await;
             }
         });
 
         let client2 = Arc::clone(&client);
         let thread_2 = tokio::spawn(async move {
             loop {
-                Self::handle_message(
-                    client2.as_ref(),
-                    &arc_stream_peer2_1,
-                    &arc_stream_peer1_1,
-                    peer2_port,
-                    peer1_port,
-                )
-                .await;
+                Self::handle_message(client2.as_ref(), &mut r2, &mut w1, peer1_port, peer2_port)
+                    .await;
             }
         });
 
@@ -189,27 +173,25 @@ impl PeerConnector {
     /// Utilizes the controller module to determine new packet contents and action
     async fn handle_message(
         client: &Mutex<PacketClient>,
-        peer_from_stream: &Arc<Mutex<SslStream<TcpStream>>>,
-        peer_to_stream: &Arc<Mutex<SslStream<TcpStream>>>,
+        peer_from_stream: &mut ReadHalf<SslStream<TcpStream>>,
+        peer_to_stream: &mut WriteHalf<SslStream<TcpStream>>,
         peer_from_port: u16,
         peer_to_port: u16,
     ) {
         let mut buf = BytesMut::with_capacity(64 * 1024);
         buf.resize(64 * 1024, 0);
         let size = peer_from_stream
-            .lock()
-            .await
             .read(buf.as_mut())
             .await
             .expect("Could not read from SSL stream");
 
-        // This is used to make sure we exclude execution time when delaying messages
-        let start_time = Instant::now();
+        // Temporary to pass pipeline with clippy
+        let _ = peer_from_port;
+        let _ = peer_to_port;
 
         buf.resize(size, 0);
         if size == 0 {
-            error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-            return;
+            panic!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
         }
         let bytes = buf.to_vec();
 
@@ -225,58 +207,49 @@ impl PeerConnector {
             panic!("Unknown version header")
         }
 
+        let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
+
+        if payload_size > 64 * 1024 * 1024 {
+            panic!("Message size too large");
+        }
+
+        // TODO: find a way to mitigate crash caused by amendments
+        if buf.len() < 6 + payload_size {
+            error!("Buffer is too short");
+            return;
+        }
+
+        let message = bytes[0..(6 + payload_size)].to_vec();
         let data = client
             .lock()
             .await
-            .send_packet(bytes, u32::from(peer_from_port), u32::from(peer_to_port))
+            .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
             .await
             .unwrap();
 
-        // TODO: send the message to the controller
-        // TODO: use returned information for further execution
-
         // For now for testing purposes: peer1 gets delayed for 1000ms with a chance of p=0.3
         // Move the current execution to a tokio thread which will delay and then send the message
-        if peer_from_port == 60001 && thread_rng().gen_bool(0.3) {
-            let peer_to_stream_clone = peer_to_stream.clone();
-            let _delay_thread = tokio::spawn(async move {
-                Self::delay_execution(peer_from_port, start_time, 1000).await;
-                peer_to_stream_clone
-                    .lock()
-                    .await
-                    .write_all(&data)
-                    .await
-                    .expect("Could not write to SSL stream");
-                debug!(
-                    "Forwarded peer message {} -> {}",
-                    peer_from_port, peer_to_port
-                )
-            });
-        }
         // For now: send the raw bytes without processing to the receiver
-        else {
-            peer_to_stream
-                .lock()
-                .await
-                .write_all(&data)
-                .await
-                .expect("Could not write to SSL stream");
-            debug!(
-                "Forwarded peer message {} -> {}",
-                peer_from_port, peer_to_port
-            )
-        }
+        peer_to_stream
+            .write_all(&data)
+            .await
+            .expect("Could not write to SSL stream");
+        debug!(
+            "Forwarded peer message {} -> {}",
+            peer_from_port, peer_to_port
+        );
+        buf.advance(6 + payload_size);
     }
 
-    /// Delay execution with respect to a defined starting time
-    async fn delay_execution(peer_id: u16, start_time: Instant, ms: u64) {
-        let elapsed_time = start_time.elapsed();
-        let delay_duration = Duration::from_millis(ms) - elapsed_time;
-
-        debug!("Delaying peer {} for {} ms", peer_id, ms);
-
-        if delay_duration > Duration::new(0, 0) {
-            tokio::time::sleep(delay_duration).await;
-        }
-    }
+    // /// Delay execution with respect to a defined starting time
+    // async fn delay_execution(peer_id: u16, start_time: Instant, ms: u64) {
+    //     let elapsed_time = start_time.elapsed();
+    //     let delay_duration = Duration::from_millis(ms) - elapsed_time;
+    //
+    //     debug!("Delaying peer {} for {} ms", peer_id, ms);
+    //
+    //     if delay_duration > Duration::new(0, 0) {
+    //         tokio::time::sleep(delay_duration).await;
+    //     }
+    // }
 }
