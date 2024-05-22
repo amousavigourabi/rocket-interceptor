@@ -194,7 +194,9 @@ impl DockerNetwork {
 
         let container_config = Config {
             image: Some(IMAGE),
-            env: Some(vec!("ENV_ARGS=--start --ledgerfile /etc/opt/ripple/ledger.json")),
+            env: Some(vec![
+                "ENV_ARGS=--start --ledgerfile /etc/opt/ripple/ledger.json",
+            ]),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
                 port_bindings: Some(port_map),
