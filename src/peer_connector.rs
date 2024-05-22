@@ -213,7 +213,7 @@ impl PeerConnector {
             panic!("Message size too large");
         }
 
-        // TODO: panics sometimes
+        // TODO: find a way to mitigate crash caused by amendments
         if buf.len() < 6 + payload_size {
             error!("Buffer is too short");
             return;
@@ -226,9 +226,6 @@ impl PeerConnector {
             .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
             .await
             .unwrap();
-
-        // TODO: send the message to the controller
-        // TODO: use returned information for further execution
 
         // For now for testing purposes: peer1 gets delayed for 1000ms with a chance of p=0.3
         // Move the current execution to a tokio thread which will delay and then send the message
