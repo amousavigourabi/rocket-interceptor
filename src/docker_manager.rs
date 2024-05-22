@@ -194,6 +194,9 @@ impl DockerNetwork {
 
         let container_config = Config {
             image: Some(IMAGE),
+            env: Some(vec![
+                "ENV_ARGS=--start --ledgerfile /etc/opt/ripple/ledger.json",
+            ]),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
                 port_bindings: Some(port_map),
@@ -324,6 +327,7 @@ impl DockerNetwork {
         keys: &[ValidatorKeyData],
     ) -> Vec<(String, ValidatorKeyData)> {
         let base_config_path = "network/rippled_base.cfg";
+        let ledger_json_path = "network/ledger.json";
         let base_config_file = fs::File::open(base_config_path);
 
         let mut base_config_contents = String::new();
@@ -360,6 +364,8 @@ impl DockerNetwork {
             validators_file
                 .write_all(format!("[validators]\n{}", public_keys.join("\n")).as_bytes())
                 .expect("Could not write to config file");
+
+            fs::copy(ledger_json_path, format!("{}/ledger.json", config_dir)).unwrap();
 
             ret.push((container_name, key.clone()));
         }
