@@ -3,6 +3,7 @@ use std::env::current_dir;
 use std::fs;
 use std::io::Read;
 use std::io::{ErrorKind, Write};
+use std::sync::Arc;
 use std::time::Duration;
 
 use bollard::container::{Config, CreateContainerOptions, RemoveContainerOptions};
@@ -11,9 +12,11 @@ use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
 use bollard::Docker;
 
+use crate::packet_client::PacketClient;
 use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
 use serde::Deserialize;
+use tokio::sync::Mutex;
 
 const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
 
@@ -99,7 +102,7 @@ impl DockerNetwork {
     /// Initializes the docker network by generating keys for each configured node, and starting
     /// them using `bollard`. The containers that were started successfully are appended to
     /// the `containers` field in the struct.
-    pub async fn initialize_network(&mut self) {
+    pub async fn initialize_network(&mut self, client: Arc<Mutex<PacketClient>>) {
         self.download_image().await;
 
         let validator_keys = self.generate_keys(self.config.number_of_nodes).await;
@@ -109,6 +112,8 @@ impl DockerNetwork {
         let base_port_ws = self.config.base_port_ws.unwrap_or(61000);
         let base_port_ws_admin = self.config.base_port_ws_admin.unwrap_or(62000);
         let base_port_rpc = self.config.base_port_rpc.unwrap_or(63000);
+
+        let mut validator_node_info_list = vec![];
 
         for (i, (name, keys)) in names_with_keys.iter().enumerate() {
             let mut validator_container = DockerContainer {
@@ -122,8 +127,24 @@ impl DockerNetwork {
             };
             self.start_validator(&mut validator_container).await;
             debug!("Started docker container {}", name.clone());
+            validator_node_info_list.push(crate::packet_client::proto::ValidatorNodeInfo {
+                ws_public_port: validator_container.port_ws as u32,
+                ws_admin_port: validator_container.port_ws_admin as u32,
+                rpc_port: validator_container.port_rpc as u32,
+                status: validator_container.key_data.status.clone(),
+                validation_key: validator_container.key_data.validation_public_key.clone(),
+                validation_private_key: validator_container.key_data.validation_private_key.clone(),
+                validation_public_key: validator_container.key_data.validation_public_key.clone(),
+                validation_seed: validator_container.key_data.validation_seed.clone(),
+            });
             self.containers.push(validator_container);
         }
+        client
+            .lock()
+            .await
+            .send_validator_node_info(validator_node_info_list)
+            .await
+            .unwrap();
     }
 
     pub async fn stop_network(&self) {
