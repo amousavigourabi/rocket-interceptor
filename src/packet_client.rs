@@ -1,3 +1,4 @@
+use crate::packet_client::proto::PacketAck;
 use log::debug;
 use proto::packet_service_client::PacketServiceClient;
 use proto::Packet;
@@ -22,7 +23,7 @@ impl PacketClient {
         packet_data: Vec<u8>,
         packet_from_port: u32,
         packet_to_port: u32,
-    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    ) -> Result<PacketAck, Box<dyn std::error::Error>> {
         if packet_data.is_empty() {
             return Err("Packet data is empty".into());
         }
@@ -46,7 +47,7 @@ impl PacketClient {
         let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
         debug!("Response: {:?}", response);
 
-        Ok(response.data)
+        Ok(response)
     }
 }
 

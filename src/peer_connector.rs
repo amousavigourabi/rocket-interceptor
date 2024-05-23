@@ -7,7 +7,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-//use std::time::{Duration, Instant};
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -185,9 +185,7 @@ impl PeerConnector {
             .await
             .expect("Could not read from SSL stream");
 
-        // Temporary to pass pipeline with clippy
-        let _ = peer_from_port;
-        let _ = peer_to_port;
+        let read_moment = Instant::now();
 
         buf.resize(size, 0);
         if size == 0 {
@@ -213,25 +211,39 @@ impl PeerConnector {
             panic!("Message size too large");
         }
 
-        // TODO: find a way to mitigate crash caused by amendments
         if buf.len() < 6 + payload_size {
             error!("Buffer is too short");
             return;
         }
 
         let message = bytes[0..(6 + payload_size)].to_vec();
-        let data = client
+        let response = client
             .lock()
             .await
             .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
             .await
             .unwrap();
 
-        // For now for testing purposes: peer1 gets delayed for 1000ms with a chance of p=0.3
-        // Move the current execution to a tokio thread which will delay and then send the message
-        // For now: send the raw bytes without processing to the receiver
+        match response.action {
+            0 => (),
+            u32::MAX => {
+                debug!(
+                    "Dropping a message sent from {} to {}",
+                    peer_from_port, peer_to_port
+                );
+                return;
+            }
+            delay => {
+                debug!(
+                    "Delaying a message sent from {} to {} for {} ms",
+                    peer_from_port, peer_to_port, delay
+                );
+                Self::delay_execution(read_moment, delay as u64).await;
+            }
+        }
+
         peer_to_stream
-            .write_all(&data)
+            .write_all(&response.data)
             .await
             .expect("Could not write to SSL stream");
         debug!(
@@ -241,15 +253,13 @@ impl PeerConnector {
         buf.advance(6 + payload_size);
     }
 
-    // /// Delay execution with respect to a defined starting time
-    // async fn delay_execution(peer_id: u16, start_time: Instant, ms: u64) {
-    //     let elapsed_time = start_time.elapsed();
-    //     let delay_duration = Duration::from_millis(ms) - elapsed_time;
-    //
-    //     debug!("Delaying peer {} for {} ms", peer_id, ms);
-    //
-    //     if delay_duration > Duration::new(0, 0) {
-    //         tokio::time::sleep(delay_duration).await;
-    //     }
-    // }
+    /// Delay execution with respect to a defined starting time
+    async fn delay_execution(start_time: Instant, ms: u64) {
+        let elapsed_time = start_time.elapsed();
+        let delay_duration = Duration::from_millis(ms) - elapsed_time;
+
+        if delay_duration > Duration::new(0, 0) {
+            tokio::time::sleep(delay_duration).await;
+        }
+    }
 }
