@@ -256,9 +256,9 @@ impl PeerConnector {
     /// Delay execution with respect to a defined starting time
     async fn delay_execution(start_time: Instant, ms: u64) {
         let elapsed_time = start_time.elapsed();
-        let delay_duration = Duration::from_millis(ms) - elapsed_time;
-
-        if delay_duration > Duration::new(0, 0) {
+        let total_delay = Duration::from_millis(ms);
+        if(elapsed_time < total_delay) {
+            let delay_duration = total_delay - elapsed_time;
             tokio::time::sleep(delay_duration).await;
         }
     }
