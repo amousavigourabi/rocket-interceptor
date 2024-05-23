@@ -8,7 +8,6 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-//use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -186,9 +185,7 @@ impl PeerConnector {
             .await
             .expect("Could not read from SSL stream");
 
-        // Temporary to pass pipeline with clippy
-        let _ = peer_from_port;
-        let _ = peer_to_port;
+        let read_moment = Instant::now();
 
         buf.resize(size, 0);
         if size == 0 {
@@ -214,7 +211,6 @@ impl PeerConnector {
             panic!("Message size too large");
         }
 
-        // TODO: find a way to mitigate crash caused by amendments
         if buf.len() < 6 + payload_size {
             error!("Buffer is too short");
             return;
@@ -228,7 +224,6 @@ impl PeerConnector {
             .await
             .unwrap();
 
-        let now = Instant::now();
         match response.action {
             0 => (),
             u32::MAX => {
@@ -243,7 +238,7 @@ impl PeerConnector {
                     "Delaying a message sent from {} to {} for {} ms",
                     peer_from_port, peer_to_port, delay
                 );
-                Self::delay_execution(now, delay as u64).await;
+                Self::delay_execution(read_moment, delay as u64).await;
             }
         }
 
