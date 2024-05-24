@@ -1,7 +1,7 @@
 use crate::packet_client::proto::PacketAck;
 use log::debug;
 use proto::packet_service_client::PacketServiceClient;
-use proto::Packet;
+use proto::{Packet, ValidatorNodeInfo};
 
 pub mod proto {
     tonic::include_proto!("packet");
@@ -49,9 +49,24 @@ impl PacketClient {
 
         Ok(response)
     }
+
+    pub async fn send_validator_node_info(
+        &mut self,
+        validator_node_info_list: Vec<ValidatorNodeInfo>,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let request = tonic::Request::new(tokio_stream::iter(validator_node_info_list.into_iter()));
+        let response = self
+            .client
+            .send_validator_node_info(request)
+            .await?
+            .into_inner();
+        debug!("Response: {:?}", response);
+
+        Ok(response.status)
+    }
 }
 
-//Test work but need the python server to be running, so commented for now
+//Test work but need the python server to be running, skipped for now
 #[cfg(test)]
 mod integration_tests {
     use super::*;
