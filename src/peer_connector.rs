@@ -1,3 +1,4 @@
+use std::io::Write;
 use crate::packet_client;
 use crate::packet_client::PacketClient;
 use bytes::{Buf, BytesMut};
@@ -6,13 +7,15 @@ use openssl::ssl::{Ssl, SslContext, SslMethod};
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, Join, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
+use crate::packet_client::proto::PacketAck;
 
 #[derive(Clone)]
 pub struct PeerConnector {
@@ -40,6 +43,20 @@ impl PeerConnector {
             Self::create_ssl_stream(self.ip_addr.as_str(), peer2_port, pub_key1).await;
         Self::handle_peer_connections(client, ssl_stream_1, ssl_stream_2, peer1_port, peer2_port)
             .await
+    }
+
+    pub async fn connect_peers_new(
+        &self,
+        peer1_port: u16,
+        peer2_port: u16,
+        pub_key1: &str,
+        pub_key2: &str,
+    ) -> (SslStream<TcpStream>, SslStream<TcpStream>) {
+        let ssl_stream_1 =
+            Self::create_ssl_stream(self.ip_addr.as_str(), peer1_port, pub_key2).await;
+        let ssl_stream_2 =
+            Self::create_ssl_stream(self.ip_addr.as_str(), peer2_port, pub_key1).await;
+        (ssl_stream_1, ssl_stream_2)
     }
 
     /// Create an SSL stream from a peer to another peer.

@@ -1,12 +1,14 @@
 mod docker_manager;
 mod packet_client;
 mod peer_connector;
+mod node_info;
 use crate::peer_connector::PeerConnector;
 use std::env;
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tokio::sync::Mutex;
+use crate::node_info::{Node, Peer};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -26,32 +28,56 @@ async fn main() -> io::Result<()> {
 
     let peer_connector = PeerConnector::new("127.0.0.1".to_string());
 
-    // Iterate over every unique validator node pair and create a thread for each
-    let mut threads = Vec::new();
-    for (i, container1) in network.containers.iter().enumerate() {
-        for container2 in &network.containers[(i + 1)..network.containers.len()] {
-            let (t1, t2) = peer_connector
-                .clone()
-                .connect_peers(
-                    client.clone(),
-                    container1.port_peer,
-                    container2.port_peer,
-                    container1.key_data.validation_public_key.as_str(),
-                    container2.key_data.validation_public_key.as_str(),
-                )
-                .await;
+    let nodes_len = network.containers.len();
+    let mut nodes = Vec::new();
+    for node in network.containers.iter() {
+        nodes.push(Node::new(node.port_peer));
+    }
 
-            threads.push(t1);
-            threads.push(t2);
+    for (i, container1) in network.containers.iter().enumerate() {
+        for (j, container2) in network.containers[(i + 1)..nodes_len].iter().enumerate() {
+            let (stream1, stream2) = peer_connector.connect_peers_new(
+                container1.port_peer,
+                container2.port_peer,
+                container1.key_data.validation_public_key.as_str(),
+                container2.key_data.validation_public_key.as_str(),
+            ).await;
+            let (mut r1, mut w1) = tokio::io::split(stream1);
+            let (mut r2, mut w2) = tokio::io::split(stream2);
+
+            let mut n1 = &mut nodes[i];
+            n1.add_peer(Peer::new(container2.port_peer, w2, r1));
+            let mut n2 = &mut nodes[j];
+            n2.add_peer(Peer::new(container1.port_peer, w1, r2));
         }
     }
-
-    // Wait for all threads to exit (due to error)
-    for t in threads {
-        t.await.expect("Thread failed");
-    }
-
-    network.stop_network().await;
+    // let mut threads = Vec::new();
+    // for mut node in nodes {
+    //     let (mut read_threads, write_thread) = node.start(client.clone());
+    //     threads.push(write_thread);
+    //     threads.append(&mut read_threads);
+    // }
+    //
+    // for thread in threads {
+    //     thread.await.expect("thread failed");
+    // }
+    //
+    // network.stop_network().await;
 
     Ok(())
 }
+
+/*
+Plan:
+Per Node a Queue. If a node wants to write, it sends it to its queue. Meaning if we read from node n,
+we send the message to queue n.
+
+
+Have for every readhalf a thread that constant reads and put it in a queue
+Have per node a thread that empties the writequeue, firing of a thread for its action.
+QueueMessage {
+    contents
+    action
+    to
+}
+ */
