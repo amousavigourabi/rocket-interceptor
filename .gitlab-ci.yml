@@ -49,7 +49,6 @@ tests:
     when: always
     reports:
       junit: junit.xml
-  allow_failure: true
 
 docs:
   stage: docs

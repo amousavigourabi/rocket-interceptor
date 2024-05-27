@@ -2077,6 +2077,7 @@ dependencies = [
  "sha2",
  "tokio",
  "tokio-openssl",
+ "tokio-stream",
  "toml",
  "tonic",
  "tonic-build",

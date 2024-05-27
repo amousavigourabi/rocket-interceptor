@@ -2,7 +2,8 @@ syntax = "proto3";
 package packet;
 
 service PacketService {
-    rpc SendPacket(Packet) returns (PacketAck);
+    rpc send_packet(Packet) returns (PacketAck);
+    rpc send_validator_node_info(stream ValidatorNodeInfo) returns (ValidatorNodeInfoAck);
 }
 
 message Packet {
@@ -14,4 +15,19 @@ message Packet {
 message PacketAck {
     bytes data = 1;
     uint32 action = 2;
+}
+
+message ValidatorNodeInfo {
+    uint32 ws_public_port = 1;
+    uint32 ws_admin_port = 2;
+    uint32 rpc_port = 3;
+    string status = 4;
+    string validation_key = 5;
+    string validation_private_key = 6;
+    string validation_public_key = 7;
+    string validation_seed = 8;
+}
+
+message ValidatorNodeInfoAck {
+    string status = 1;
 }

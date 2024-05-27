@@ -15,14 +15,15 @@ async fn main() -> io::Result<()> {
     env::set_var("RUST_LOG", "DEBUG");
     env_logger::init();
 
-    // Init docker network
-    let network_config = docker_manager::get_config();
-    let mut network = docker_manager::DockerNetwork::new(network_config);
-    network.initialize_network().await;
     let client = match packet_client::PacketClient::new().await {
         Ok(client) => Arc::new(Mutex::new(client)),
         error => panic!("Error creating client: {:?}", error),
     };
+
+    // Init docker network
+    let network_config = docker_manager::get_config();
+    let mut network = docker_manager::DockerNetwork::new(network_config);
+    network.initialize_network(client.clone()).await;
 
     tokio::time::sleep(Duration::from_secs(3)).await;
 
