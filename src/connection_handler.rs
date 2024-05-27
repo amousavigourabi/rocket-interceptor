@@ -2,9 +2,10 @@ use std::future::Future;
 use std::io::Write;
 use std::ptr::read;
 use std::sync::{Arc, mpsc};
+use std::sync::mpsc::SendError;
 use std::time::{Duration, Instant};
 use bytes::BytesMut;
-use log::error;
+use log::{debug, error};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Join, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -23,15 +24,26 @@ impl Message {
     }
 }
 
-pub struct Node {
-    pub port: u16,
-    pub peers: Vec<Peer>,
-}
-
+#[derive(Debug)]
 pub struct Peer {
     pub port: u16,
     pub write_half: WriteHalf<SslStream<TcpStream>>,
     pub read_half: ReadHalf<SslStream<TcpStream>>,
+}
+
+impl Peer {
+    pub fn new(
+        port: u16,
+        write_half: WriteHalf<SslStream<TcpStream>>,
+        read_half: ReadHalf<SslStream<TcpStream>>,
+    ) -> Self {
+        Self { port, write_half, read_half }
+    }
+}
+
+pub struct Node {
+    pub port: u16,
+    pub peers: Vec<Peer>,
 }
 
 impl Node {
@@ -43,7 +55,7 @@ impl Node {
         self.peers.push(peer);
     }
 
-    pub fn start(mut self, client: Arc<Mutex<PacketClient>>) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
+    pub fn handle_messages(mut self, client: Arc<Mutex<PacketClient>>) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (sender, receiver) = mpsc::channel::<Message>();
         let mut read_threads = Vec::new();
         let mut peer_ports = Vec::new();
@@ -51,7 +63,7 @@ impl Node {
 
         for peer in self.peers {
             let read_thread = tokio::spawn(
-                Self::handle_read(
+                Self::read_loop(
                     peer.read_half,
                     client.clone(),
                     self.port,
@@ -62,85 +74,87 @@ impl Node {
             read_threads.push(read_thread);
             peer_ports.push(peer.port);
             peer_write_halves.push(peer.write_half);
+            debug!("Started peer");
         };
 
-        let write_thread = tokio::spawn(Self::handle_write(receiver, peer_ports, peer_write_halves));
+        let write_thread = tokio::spawn(Self::write_loop(receiver, peer_ports, peer_write_halves));
         (read_threads, write_thread)
     }
 
-    async fn handle_read(
+    async fn read_loop(
         mut read_half: ReadHalf<SslStream<TcpStream>>,
         client: Arc<Mutex<PacketClient>>,
         peer_from_port: u16,
         peer_to_port: u16,
-        queue: mpsc::Sender<Message>
+        queue_sender: mpsc::Sender<Message>
     ) {
         loop {
             let mut buf = BytesMut::with_capacity(64 * 1024);
             buf.resize(64 * 1024, 0);
-            let size = read_half
+            let size_read = read_half
                 .read(buf.as_mut())
                 .await
                 .expect("Could not read from SSL stream");
 
             let read_moment = Instant::now();
 
-            buf.resize(size, 0);
-            if size == 0 {
-                panic!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-            }
-            let bytes = buf.to_vec();
-
-            // Check if the most significant bit turned on, indicating a compressed message
-            if bytes[0] & 0x80 != 0 {
-                error!("{:?}", bytes[0]);
-                panic!("Received compressed message");
-            }
-
-            // Check if any of the 6 most significant bits are turned on, indicating an unknown header
-            if bytes[0] & 0xFC != 0 {
-                error!("{:?}", bytes[0]);
-                panic!("Unknown version header")
-            }
-
-            let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
-
-            if payload_size > 64 * 1024 * 1024 {
-                panic!("Message size too large");
-            }
-
-            if buf.len() < 6 + payload_size {
-                error!("Buffer is too short");
-                return;
-            }
-
-            let message = bytes[0..(6 + payload_size)].to_vec();
-
-            tokio::spawn(Self::handle_action(
-               client.clone(),
-               peer_from_port,
-               peer_to_port,
-               queue.clone(),
-               read_moment,
-               message,
+            tokio::spawn(Self::handle_message_and_action(
+                buf,
+                size_read,
+                client.clone(),
+                peer_from_port,
+                peer_to_port,
+                queue_sender.clone(),
+                read_moment,
             ));
         }
     }
 
-    async fn handle_action(
+    async fn handle_message_and_action(
+        mut buf: BytesMut,
+        size_read: usize,
         client: Arc<Mutex<PacketClient>>,
         peer_from_port: u16,
         peer_to_port: u16,
         queue: mpsc::Sender<Message>,
         read_moment: Instant,
-        message: Vec<u8>,
     ) {
+        buf.resize(size_read, 0);
+        if size_read == 0 {
+            panic!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
+        }
+        let bytes = buf.to_vec();
+
+        // Check if the most significant bit turned on, indicating a compressed message
+        if bytes[0] & 0x80 != 0 {
+            error!("{:?}", bytes[0]);
+            panic!("Received compressed message");
+        }
+
+        // Check if any of the 6 most significant bits are turned on, indicating an unknown header
+        if bytes[0] & 0xFC != 0 {
+            error!("{:?}", bytes[0]);
+            panic!("Unknown version header")
+        }
+
+        let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
+
+        if payload_size > 64 * 1024 * 1024 {
+            panic!("Message size too large");
+        }
+
+        if buf.len() < 6 + payload_size {
+            error!("Buffer is too short");
+            return;
+        }
+
+        let message = bytes[0..(6 + payload_size)].to_vec();
         let response = client
             .lock()
             .await
             .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
             .await
-            .unwrap();
+            .expect("Error occurred while requesting message from the controller.");
 
         match response.action {
             0 => (),
@@ -155,19 +169,21 @@ impl Node {
             }
         }
 
-        queue.send(Message::new(response.data, peer_to_port)).unwrap()
+        queue
+            .send(Message::new(response.data, peer_to_port))
+            .expect("Could not write message from {} to {} with contents {} to the queue.");
     }
 
-    async fn handle_write(
+    async fn write_loop(
         receiver: mpsc::Receiver<Message>,
         peer_ports: Vec<u16>,
         mut peer_write_halves: Vec<WriteHalf<SslStream<TcpStream>>>,
     ) {
         loop {
-            let message = receiver.recv().unwrap();
-            let peer_index = *peer_ports.iter().find(|&&peer| peer == message.port_to).unwrap();
+            let message = receiver.recv().expect("Could not read message from the queue.");
+            let peer_index = peer_ports.iter().enumerate().find(|(_, &peer)| peer == message.port_to).unwrap().0;
 
-            let mut write_half = &mut peer_write_halves[peer_index as usize];
+            let mut write_half = &mut peer_write_halves[peer_index];
 
             write_half
                 .write_all(&message.data)
@@ -178,12 +194,3 @@ impl Node {
 }
 
 
-impl Peer {
-    pub fn new(
-        port: u16,
-        write_half: WriteHalf<SslStream<TcpStream>>,
-        read_half: ReadHalf<SslStream<TcpStream>>,
-    ) -> Self {
-        Self { port, write_half, read_half }
-    }
-}

@@ -1,18 +1,18 @@
 mod docker_manager;
 mod packet_client;
 mod peer_connector;
-mod node_info;
+mod connection_handler;
 use crate::peer_connector::PeerConnector;
 use std::env;
 use std::io;
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tokio::sync::Mutex;
-use crate::node_info::{Node, Peer};
+use crate::connection_handler::{Node, Peer};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", "DEBUG");
+    env::set_var("RUST_LOG", "xrpl_packet_interceptor=DEBUG");
     env_logger::init();
 
     let client = match packet_client::PacketClient::new().await {
@@ -37,7 +37,7 @@ async fn main() -> io::Result<()> {
 
     for (i, container1) in network.containers.iter().enumerate() {
         for (j, container2) in network.containers[(i + 1)..nodes_len].iter().enumerate() {
-            let (stream1, stream2) = peer_connector.connect_peers_new(
+            let (stream1, stream2) = peer_connector.connect_peers(
                 container1.port_peer,
                 container2.port_peer,
                 container1.key_data.validation_public_key.as_str(),
@@ -52,13 +52,13 @@ async fn main() -> io::Result<()> {
             n2.add_peer(Peer::new(container1.port_peer, w1, r2));
         }
     }
+
     let mut threads = Vec::new();
     for node in nodes {
-        let (mut read_threads, write_thread) = node.start(client.clone());
+        let (mut read_threads, write_thread) = node.handle_messages(client.clone());
         threads.push(write_thread);
         threads.append(&mut read_threads);
     }
-
 
     for thread in threads {
         thread.await.expect("thread failed");
