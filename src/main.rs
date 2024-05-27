@@ -42,27 +42,28 @@ async fn main() -> io::Result<()> {
                 container1.key_data.validation_public_key.as_str(),
                 container2.key_data.validation_public_key.as_str(),
             ).await;
-            let (mut r1, mut w1) = tokio::io::split(stream1);
-            let (mut r2, mut w2) = tokio::io::split(stream2);
+            let (r1, w1) = tokio::io::split(stream1);
+            let (r2, w2) = tokio::io::split(stream2);
 
-            let mut n1 = &mut nodes[i];
+            let n1 = &mut nodes[i];
             n1.add_peer(Peer::new(container2.port_peer, w2, r1));
-            let mut n2 = &mut nodes[j];
+            let n2 = &mut nodes[j];
             n2.add_peer(Peer::new(container1.port_peer, w1, r2));
         }
     }
-    // let mut threads = Vec::new();
-    // for mut node in nodes {
-    //     let (mut read_threads, write_thread) = node.start(client.clone());
-    //     threads.push(write_thread);
-    //     threads.append(&mut read_threads);
-    // }
-    //
-    // for thread in threads {
-    //     thread.await.expect("thread failed");
-    // }
-    //
-    // network.stop_network().await;
+    let mut threads = Vec::new();
+    for node in nodes {
+        let (mut read_threads, write_thread) = node.start(client.clone());
+        threads.push(write_thread);
+        threads.append(&mut read_threads);
+    }
+
+
+    for thread in threads {
+        thread.await.expect("thread failed");
+    }
+
+    network.stop_network().await;
 
     Ok(())
 }

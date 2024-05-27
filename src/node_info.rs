@@ -14,13 +14,12 @@ use crate::packet_client::PacketClient;
 
 pub struct Message {
     pub data: Vec<u8>,
-    pub action: u32,
-    pub to: u16,
+    pub port_to: u16,
 }
 
 impl Message {
-    pub fn new(data: Vec<u8>, action: u32, to: u16) -> Self {
-        Self { data, action, to }
+    pub fn new(data: Vec<u8>, port_to: u16) -> Self {
+        Self { data, port_to }
     }
 }
 
@@ -31,8 +30,8 @@ pub struct Node {
 
 pub struct Peer {
     pub port: u16,
-    pub write_connection: WriteHalf<SslStream<TcpStream>>,
-    pub read_connection: ReadHalf<SslStream<TcpStream>>,
+    pub write_half: WriteHalf<SslStream<TcpStream>>,
+    pub read_half: ReadHalf<SslStream<TcpStream>>,
 }
 
 impl Node {
@@ -44,14 +43,16 @@ impl Node {
         self.peers.push(peer);
     }
 
-    pub fn start(self, client: Arc<Mutex<PacketClient>>) {
+    pub fn start(mut self, client: Arc<Mutex<PacketClient>>) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (sender, receiver) = mpsc::channel::<Message>();
         let mut read_threads = Vec::new();
+        let mut peer_ports = Vec::new();
+        let mut peer_write_halves = Vec::new();
 
         for peer in self.peers {
             let read_thread = tokio::spawn(
                 Self::handle_read(
-                    peer.read_connection,
+                    peer.read_half,
                     client.clone(),
                     self.port,
                     peer.port,
@@ -59,11 +60,12 @@ impl Node {
                 )
             );
             read_threads.push(read_thread);
+            peer_ports.push(peer.port);
+            peer_write_halves.push(peer.write_half);
         };
-        // let peer_ports = self.peers.iter().map(|x| x.port).collect();
-        // let peer_write_halves = self.peers.iter().map(|x| x.write_connection).collect();
-        // let write_thread = tokio::spawn(Self::handle_write(receiver, peer_ports, peer_write_halves));
-        // (read_threads, write_thread)
+
+        let write_thread = tokio::spawn(Self::handle_write(receiver, peer_ports, peer_write_halves));
+        (read_threads, write_thread)
     }
 
     async fn handle_read(
@@ -113,47 +115,75 @@ impl Node {
             }
 
             let message = bytes[0..(6 + payload_size)].to_vec();
-            let response = client
-                .lock()
-                .await
-                .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
-                .await
-                .unwrap();
 
-            queue.send(Message::new(response.data, response.action, peer_to_port)).unwrap()
+            tokio::spawn(Self::handle_action(
+               client.clone(),
+               peer_from_port,
+               peer_to_port,
+               queue.clone(),
+               read_moment,
+               message,
+            ));
         }
     }
 
-    // async fn handle_write(
-    //     receiver: mpsc::Receiver<Message>,
-    //     peer_ports: Vec<u16>,
-    //     mut peer_write_halves: Vec<WriteHalf<SslStream<TcpStream>>>,
-    // ) {
-    //     loop {
-    //         let message = receiver.recv().unwrap();
-    //         let peer_index = *peer_ports.iter().find(|&&peer| peer == message.to).unwrap();
-    //
-    //         match message.action {
-    //             0 => (),
-    //             u32::MAX => return,
-    //             delay => tokio::time::sleep(Duration::from_millis(delay as u64)).await
-    //         }
-    //
-    //         peer_write_halves.get(peer_index as usize).expect("fakka")
-    //             .write_all(&message.data)
-    //             .await
-    //             .expect("Could not write to SSL stream");
-    //     }
-    // }
+    async fn handle_action(
+        client: Arc<Mutex<PacketClient>>,
+        peer_from_port: u16,
+        peer_to_port: u16,
+        queue: mpsc::Sender<Message>,
+        read_moment: Instant,
+        message: Vec<u8>,
+    ) {
+        let response = client
+            .lock()
+            .await
+            .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
+            .await
+            .unwrap();
+
+        match response.action {
+            0 => (),
+            u32::MAX => return,
+            delay_ms => {
+                let delay_ms = delay_ms as u128;
+                let time_elapsed = read_moment.elapsed().as_millis();
+                if time_elapsed < delay_ms {
+                    let delay_compensated = delay_ms - time_elapsed;
+                    tokio::time::sleep(Duration::from_millis(delay_compensated as u64)).await
+                }
+            }
+        }
+
+        queue.send(Message::new(response.data, peer_to_port)).unwrap()
+    }
+
+    async fn handle_write(
+        receiver: mpsc::Receiver<Message>,
+        peer_ports: Vec<u16>,
+        mut peer_write_halves: Vec<WriteHalf<SslStream<TcpStream>>>,
+    ) {
+        loop {
+            let message = receiver.recv().unwrap();
+            let peer_index = *peer_ports.iter().find(|&&peer| peer == message.port_to).unwrap();
+
+            let mut write_half = &mut peer_write_halves[peer_index as usize];
+
+            write_half
+                .write_all(&message.data)
+                .await
+                .expect("Could not write to SSL stream");
+        }
+    }
 }
 
 
 impl Peer {
     pub fn new(
         port: u16,
-        write_connection: WriteHalf<SslStream<TcpStream>>,
-        read_connection: ReadHalf<SslStream<TcpStream>>,
+        write_half: WriteHalf<SslStream<TcpStream>>,
+        read_half: ReadHalf<SslStream<TcpStream>>,
     ) -> Self {
-        Self { port, write_connection, read_connection }
+        Self { port, write_half, read_half }
     }
 }
