@@ -1,26 +1,23 @@
-use std::future::Future;
-use std::io::Write;
-use std::ptr::read;
-use std::sync::{Arc, mpsc};
-use std::sync::mpsc::SendError;
-use std::time::{Duration, Instant};
+use crate::packet_client::PacketClient;
 use bytes::BytesMut;
-use log::{debug, error};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, Join, ReadHalf, WriteHalf};
+use log::error;
+use std::sync::{mpsc, Arc};
+use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
-use crate::packet_client::PacketClient;
 
+#[derive(Debug)]
 pub struct Message {
     pub data: Vec<u8>,
-    pub port_to: u16,
+    pub to_peer_port: u16,
 }
 
 impl Message {
-    pub fn new(data: Vec<u8>, port_to: u16) -> Self {
-        Self { data, port_to }
+    pub fn new(data: Vec<u8>, to_peer_port: u16) -> Self {
+        Self { data, to_peer_port }
     }
 }
 
@@ -32,15 +29,23 @@ pub struct Peer {
 }
 
 impl Peer {
+    /// Makes a new peer from a node's perspective.
+    /// write_half = the half the interceptor uses to write to that peer
+    /// read_half = the half that the node writes to if it wants to send a message to the peer
     pub fn new(
         port: u16,
         write_half: WriteHalf<SslStream<TcpStream>>,
         read_half: ReadHalf<SslStream<TcpStream>>,
     ) -> Self {
-        Self { port, write_half, read_half }
+        Self {
+            port,
+            write_half,
+            read_half,
+        }
     }
 }
 
+#[derive(Debug)]
 pub struct Node {
     pub port: u16,
     pub peers: Vec<Peer>,
@@ -48,45 +53,48 @@ pub struct Node {
 
 impl Node {
     pub fn new(port: u16) -> Self {
-        Self { port, peers: Vec::new() }
+        Self {
+            port,
+            peers: Vec::new(),
+        }
     }
 
     pub fn add_peer(&mut self, peer: Peer) {
         self.peers.push(peer);
     }
 
-    pub fn handle_messages(mut self, client: Arc<Mutex<PacketClient>>) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
+    /// This method handles all the messages which this node wants to write to its peers.
+    pub fn handle_messages(
+        self,
+        client: Arc<Mutex<PacketClient>>,
+    ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (sender, receiver) = mpsc::channel::<Message>();
         let mut read_threads = Vec::new();
-        let mut peer_ports = Vec::new();
-        let mut peer_write_halves = Vec::new();
+        let mut peers = Vec::new();
 
         for peer in self.peers {
-            let read_thread = tokio::spawn(
-                Self::read_loop(
-                    peer.read_half,
-                    client.clone(),
-                    self.port,
-                    peer.port,
-                    sender.clone(),
-                )
-            );
+            let read_thread = tokio::spawn(Self::read_loop(
+                peer.read_half,
+                client.clone(),
+                self.port,
+                peer.port,
+                sender.clone(),
+            ));
             read_threads.push(read_thread);
-            peer_ports.push(peer.port);
-            peer_write_halves.push(peer.write_half);
-            debug!("Started peer");
-        };
+            peers.push((peer.port, peer.write_half));
+        }
 
-        let write_thread = tokio::spawn(Self::write_loop(receiver, peer_ports, peer_write_halves));
+        let write_thread = tokio::spawn(Self::write_loop(receiver, peers));
         (read_threads, write_thread)
     }
 
+    // This method polls one ReadHalf from the node and spawns a thread that handles the intercepted message.
     async fn read_loop(
         mut read_half: ReadHalf<SslStream<TcpStream>>,
         client: Arc<Mutex<PacketClient>>,
         peer_from_port: u16,
         peer_to_port: u16,
-        queue_sender: mpsc::Sender<Message>
+        queue_sender: mpsc::Sender<Message>,
     ) {
         loop {
             let mut buf = BytesMut::with_capacity(64 * 1024);
@@ -110,6 +118,10 @@ impl Node {
         }
     }
 
+    /// This method handles an intercepted message.
+    /// It asks the controller what action to take, and takes that action.
+    /// Once the action has taken, it sends the message to a queue where another thread will
+    /// immediately send the message to the corresponding peer.
     async fn handle_message_and_action(
         mut buf: BytesMut,
         size_read: usize,
@@ -174,16 +186,20 @@ impl Node {
             .expect("Could not write message from {} to {} with contents {} to the queue.");
     }
 
+    /// This method polls a queue with messages.
+    /// It sends every message to the corresponding node immediately.
     async fn write_loop(
         receiver: mpsc::Receiver<Message>,
-        peer_ports: Vec<u16>,
-        mut peer_write_halves: Vec<WriteHalf<SslStream<TcpStream>>>,
+        mut peers: Vec<(u16, WriteHalf<SslStream<TcpStream>>)>,
     ) {
         loop {
-            let message = receiver.recv().expect("Could not read message from the queue.");
-            let peer_index = peer_ports.iter().enumerate().find(|(_, &peer)| peer == message.port_to).unwrap().0;
+            let message = receiver.recv().unwrap();
 
-            let mut write_half = &mut peer_write_halves[peer_index];
+            let write_half = &mut peers
+                .iter_mut()
+                .find(|peer| peer.0 == message.to_peer_port)
+                .unwrap()
+                .1;
 
             write_half
                 .write_all(&message.data)
@@ -192,5 +208,3 @@ impl Node {
         }
     }
 }
-
-

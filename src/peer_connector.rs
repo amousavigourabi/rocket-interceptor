@@ -1,21 +1,12 @@
-use std::io::Write;
-use crate::packet_client;
-use crate::packet_client::PacketClient;
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::{mpsc, Arc};
-use std::sync::mpsc::{Receiver, Sender};
-use std::time::{Duration, Instant};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, Join, ReadHalf, WriteHalf};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
-use crate::packet_client::proto::PacketAck;
 
 #[derive(Clone)]
 pub struct PeerConnector {
@@ -120,7 +111,7 @@ impl PeerConnector {
         ssl_stream
     }
 
-    /// Create a request message which wil upgrade the connection between peer and interceptor
+    /// Creates a request message which wil upgrade the connection between peer and interceptor
     /// The content is trivial. The Session-Signature gets neglected (dummy value 'a')
     /// since we removed the handshake verification check in the rippled source code.
     fn format_upgrade_request_content(pub_key_peer_to: &str) -> String {

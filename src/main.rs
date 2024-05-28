@@ -1,14 +1,14 @@
+mod connection_handler;
 mod docker_manager;
 mod packet_client;
 mod peer_connector;
-mod connection_handler;
+use crate::connection_handler::{Node, Peer};
 use crate::peer_connector::PeerConnector;
 use std::env;
 use std::io;
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use crate::connection_handler::{Node, Peer};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -29,20 +29,23 @@ async fn main() -> io::Result<()> {
 
     let peer_connector = PeerConnector::new("127.0.0.1".to_string());
 
-    let nodes_len = network.containers.len();
     let mut nodes = Vec::new();
     for node in network.containers.iter() {
         nodes.push(Node::new(node.port_peer));
     }
 
+    let nodes_len = network.containers.len();
     for (i, container1) in network.containers.iter().enumerate() {
         for (j, container2) in network.containers[(i + 1)..nodes_len].iter().enumerate() {
-            let (stream1, stream2) = peer_connector.connect_peers(
-                container1.port_peer,
-                container2.port_peer,
-                container1.key_data.validation_public_key.as_str(),
-                container2.key_data.validation_public_key.as_str(),
-            ).await;
+            let j = i + 1 + j;
+            let (stream1, stream2) = peer_connector
+                .connect_peers(
+                    container1.port_peer,
+                    container2.port_peer,
+                    container1.key_data.validation_public_key.as_str(),
+                    container2.key_data.validation_public_key.as_str(),
+                )
+                .await;
             let (r1, w1) = tokio::io::split(stream1);
             let (r2, w2) = tokio::io::split(stream2);
 
@@ -68,18 +71,3 @@ async fn main() -> io::Result<()> {
 
     Ok(())
 }
-
-/*
-Plan:
-Per Node a Queue. If a node wants to write, it sends it to its queue. Meaning if we read from node n,
-we send the message to queue n.
-
-
-Have for every readhalf a thread that constant reads and put it in a queue
-Have per node a thread that empties the writequeue, firing of a thread for its action.
-QueueMessage {
-    contents
-    action
-    to
-}
- */
