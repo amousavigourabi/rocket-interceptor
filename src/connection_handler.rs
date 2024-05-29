@@ -17,12 +17,12 @@ const SIZE_64MB: usize = 64 * SIZE_MB;
 #[derive(Debug)]
 pub struct Message {
     pub data: Vec<u8>,
-    pub to_peer_port: u16,
+    pub peer_to_port: u16,
 }
 
 impl Message {
-    pub fn new(data: Vec<u8>, to_peer_port: u16) -> Self {
-        Self { data, to_peer_port }
+    pub fn new(data: Vec<u8>, peer_to_port: u16) -> Self {
+        Self { data, peer_to_port }
     }
 }
 
@@ -165,7 +165,10 @@ impl Node {
 
         queue
             .send(Message::new(response.data, peer_to_port))
-            .expect("Could not write message from {} to {} with contents {} to the queue.");
+            .expect(&format!(
+                "Could not write message from {} to {} with contents {:?} to the queue.",
+                peer_from_port, peer_to_port, response.data
+            ));
     }
 
     fn check_message(buf: BytesMut) -> Vec<u8> {
