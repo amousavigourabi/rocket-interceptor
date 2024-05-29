@@ -171,6 +171,8 @@ impl Node {
             ));
     }
 
+    /// Checks a message that is contained inside buf if it is valid.
+    /// Returns the valid message as a Vec<u8>.
     fn check_message(buf: BytesMut) -> Vec<u8> {
         // Check if the most significant bit turned on, indicating a compressed message
         if (buf[0] & 0b1000_0000) != 0 {
@@ -183,10 +185,6 @@ impl Node {
         }
 
         let payload_size = u32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
-
-        if payload_size > SIZE_64MB {
-            panic!("Message size too large.");
-        }
 
         if buf.len() < 6 + payload_size {
             error!("Message did not fit in the buffer.");
@@ -221,15 +219,84 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
+    use crate::connection_handler::{Node, SIZE_64KB, SIZE_64MB};
     use bytes::BytesMut;
-    use crate::connection_handler::{Node, SIZE_64KB};
+    use rand::Rng;
 
-    fn dummy_pay_load() {
+    fn create_dummy_payload(len: usize) -> Vec<u8> {
+        let mut payload = Vec::new();
+        let mut rng = rand::thread_rng();
 
+        for _i in 0..len {
+            payload.push(rng.gen::<u8>());
+        }
+
+        payload
+    }
+
+    fn create_header(first_six_bits: u8, payload_size: usize) -> Vec<u8> {
+        if payload_size >= SIZE_64MB {
+            panic!("Invalid payload size")
+        }
+
+        let first_six_bits = first_six_bits & 0b1111_1100;
+
+        let bytes = payload_size.to_be_bytes();
+        match bytes.len() {
+            2 => vec![first_six_bits, 0, bytes[0], bytes[1]],
+            4 => vec![first_six_bits | bytes[0], bytes[1], bytes[2], bytes[3]],
+            8 => vec![first_six_bits | bytes[4], bytes[5], bytes[6], bytes[7]],
+            _ => panic!("This should not happen"),
+        }
     }
 
     #[test]
-    fn t1() {
-        let buf = BytesMut::with_capacity(SIZE_64KB);
+    #[should_panic(expected = "Received compressed message: bytes[0] = 128")]
+    fn panic_compressed_message() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 255;
+        buf.extend_from_slice(&create_header(0b1000_0000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let _message = Node::check_message(buf);
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown version header: bytes[0] = 40")]
+    fn panic_unknown_version_header() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 44;
+        buf.extend_from_slice(&create_header(0b0010_1000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let _message = Node::check_message(buf);
+    }
+
+    #[test]
+    fn pass_check_message_1() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 444;
+        buf.extend_from_slice(&create_header(0b0000_0000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let message = Node::check_message(buf);
+
+        assert_eq!(message.len(), payload_size + 6)
+    }
+
+    #[test]
+    fn pass_check_message_2() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 4444;
+        buf.extend_from_slice(&create_header(0b0000_0000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let message = Node::check_message(buf);
+
+        assert_eq!(message.len(), payload_size + 6)
     }
 }
