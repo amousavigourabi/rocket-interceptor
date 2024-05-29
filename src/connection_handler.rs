@@ -166,8 +166,8 @@ impl Node {
         queue
             .send(Message::new(response.data, peer_to_port))
             .expect(&format!(
-                "Could not write message from {} to {} with contents {:?} to the queue.",
-                peer_from_port, peer_to_port, response.data
+                "Could not write message from {} to {} to the queue.",
+                peer_from_port, peer_to_port,
             ));
     }
 
@@ -207,7 +207,7 @@ impl Node {
 
             let write_half = &mut peers
                 .iter_mut()
-                .find(|peer| peer.0 == message.to_peer_port)
+                .find(|peer| peer.0 == message.peer_to_port)
                 .unwrap()
                 .1;
 
