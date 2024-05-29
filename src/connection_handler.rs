@@ -9,6 +9,11 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
+const SIZE_KB: usize = 1024;
+const SIZE_MB: usize = 1024 * SIZE_KB;
+const SIZE_64KB: usize = 64 * SIZE_KB;
+const SIZE_64MB: usize = 64 * SIZE_MB;
+
 #[derive(Debug)]
 pub struct Message {
     pub data: Vec<u8>,
@@ -97,8 +102,8 @@ impl Node {
         queue_sender: mpsc::Sender<Message>,
     ) {
         loop {
-            let mut buf = BytesMut::with_capacity(64 * 1024);
-            buf.resize(64 * 1024, 0);
+            let mut buf = BytesMut::with_capacity(SIZE_64KB);
+            buf.resize(SIZE_64KB, 0);
             let size_read = read_half
                 .read(buf.as_mut())
                 .await
@@ -106,9 +111,16 @@ impl Node {
 
             let read_moment = Instant::now();
 
+            buf.resize(size_read, 0);
+            if size_read == 0 {
+                panic!(
+                    "SslStream from peer {} to peer {} has been closed.",
+                    peer_from_port, peer_to_port
+                );
+            }
+
             tokio::spawn(Self::handle_message_and_action(
                 buf,
-                size_read,
                 client.clone(),
                 peer_from_port,
                 peer_to_port,
@@ -123,50 +135,20 @@ impl Node {
     /// Once the action has taken, it sends the message to a queue where another thread will
     /// immediately send the message to the corresponding peer.
     async fn handle_message_and_action(
-        mut buf: BytesMut,
-        size_read: usize,
+        buffered_message: BytesMut,
         client: Arc<Mutex<PacketClient>>,
         peer_from_port: u16,
         peer_to_port: u16,
         queue: mpsc::Sender<Message>,
         read_moment: Instant,
     ) {
-        buf.resize(size_read, 0);
-        if size_read == 0 {
-            panic!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-        }
-        let bytes = buf.to_vec();
-
-        // Check if the most significant bit turned on, indicating a compressed message
-        if bytes[0] & 0x80 != 0 {
-            error!("{:?}", bytes[0]);
-            panic!("Received compressed message");
-        }
-
-        // Check if any of the 6 most significant bits are turned on, indicating an unknown header
-        if bytes[0] & 0xFC != 0 {
-            error!("{:?}", bytes[0]);
-            panic!("Unknown version header")
-        }
-
-        let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
-
-        if payload_size > 64 * 1024 * 1024 {
-            panic!("Message size too large");
-        }
-
-        if buf.len() < 6 + payload_size {
-            error!("Buffer is too short");
-            return;
-        }
-
-        let message = bytes[0..(6 + payload_size)].to_vec();
+        let message = Self::check_message(buffered_message);
         let response = client
             .lock()
             .await
             .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
             .await
-            .expect("Error occurred while requesting message from the controller.");
+            .expect("Error occurred while requesting message and action from the controller.");
 
         match response.action {
             0 => (),
@@ -184,6 +166,31 @@ impl Node {
         queue
             .send(Message::new(response.data, peer_to_port))
             .expect("Could not write message from {} to {} with contents {} to the queue.");
+    }
+
+    fn check_message(buf: BytesMut) -> Vec<u8> {
+        // Check if the most significant bit turned on, indicating a compressed message
+        if (buf[0] & 0b1000_0000) != 0 {
+            panic!("Received compressed message: bytes[0] = {:?}", buf[0]);
+        }
+
+        // Check if any of the 6 most significant bits are turned on, indicating an unknown header
+        if (buf[0] & 0b1111_1100) != 0 {
+            panic!("Unknown version header: bytes[0] = {:?}", buf[0]);
+        }
+
+        let payload_size = u32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
+
+        if payload_size > SIZE_64MB {
+            panic!("Message size too large.");
+        }
+
+        if buf.len() < 6 + payload_size {
+            error!("Message did not fit in the buffer.");
+        }
+
+        let message = buf[0..(6 + payload_size)].to_vec();
+        message
     }
 
     /// This method polls a queue with messages.
@@ -206,5 +213,20 @@ impl Node {
                 .await
                 .expect("Could not write to SSL stream");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::BytesMut;
+    use crate::connection_handler::{Node, SIZE_64KB};
+
+    fn dummy_pay_load() {
+
+    }
+
+    #[test]
+    fn t1() {
+        let buf = BytesMut::with_capacity(SIZE_64KB);
     }
 }
