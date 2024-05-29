@@ -183,10 +183,12 @@ impl Node {
 
         queue
             .send(Message::new(response.data, peer_to_port))
-            .expect(&format!(
-                "Could not write message from {} to {} to the queue.",
-                peer_from_port, peer_to_port,
-            ));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Could not write message from {} to {} to the queue.",
+                    peer_from_port, peer_to_port
+                )
+            });
     }
 
     /// This method polls a queue with messages.
