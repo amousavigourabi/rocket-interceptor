@@ -1,5 +1,5 @@
 use crate::packet_client::proto::PacketAck;
-use log::debug;
+use log::{debug, info};
 use proto::packet_service_client::PacketServiceClient;
 use proto::{Packet, ValidatorNodeInfo};
 
@@ -45,7 +45,7 @@ impl PacketClient {
         });
 
         let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
-        debug!("Response: {:?}", response);
+        info!("Response: {:?}", response);
 
         Ok(response)
     }

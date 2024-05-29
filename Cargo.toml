@@ -24,6 +24,8 @@ rand = "0.9.0-alpha.1"
 tonic = "0.11.0"
 prost = "0.12.4"
 tokio-stream = "0.1.15"
+fern = "0.6.0"
+chrono = "0.4.38"
 
 [build-dependencies]
 tonic-build = "0.11.0"
