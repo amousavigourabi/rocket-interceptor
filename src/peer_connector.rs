@@ -38,10 +38,7 @@ impl PeerConnector {
     /// instead of sending it straight to the other peer.
     async fn create_ssl_stream(ip: &str, port: u16, pub_key_peer_to: &str) -> SslStream<TcpStream> {
         let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
-        let tcp_stream = match TcpStream::connect(socket_address).await {
-            Ok(tcp_stream) => tcp_stream,
-            Err(e) => panic!("{}", e),
-        };
+        let tcp_stream = TcpStream::connect(socket_address).await.unwrap();
 
         tcp_stream.set_nodelay(true).expect("Set nodelay failed");
         let ssl_ctx = SslContext::builder(SslMethod::tls()).unwrap().build();
@@ -125,6 +122,29 @@ impl PeerConnector {
             Session-Signature: a\r\n\
             \r\n",
             pub_key_peer_to
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::peer_connector::PeerConnector;
+
+    #[test]
+    fn upgrade_request_test() {
+        let expected = String::from(
+            "\
+            GET / HTTP/1.1\r\n\
+            Upgrade: XRPL/2.2\r\n\
+            Connection: Upgrade\r\n\
+            Connect-As: Peer\r\n\
+            Public-Key: 123456789abcdefg\r\n\
+            Session-Signature: a\r\n\
+            \r\n"
+        );
+        assert_eq!(
+            expected,
+            PeerConnector::format_upgrade_request_content("123456789abcdefg"),
         )
     }
 }
