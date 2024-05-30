@@ -5,12 +5,11 @@ use crate::peer_connector::PeerConnector;
 use std::env;
 use std::io;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", "DEBUG");
+    env::set_var("RUST_LOG", "xrpl_packet_interceptor=DEBUG");
     env_logger::init();
 
     let client = match packet_client::PacketClient::new().await {
@@ -22,8 +21,7 @@ async fn main() -> io::Result<()> {
     let network_config = docker_manager::get_config();
     let mut network = docker_manager::DockerNetwork::new(network_config);
     network.initialize_network(client.clone()).await;
-
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    network.wait_for_startup().await;
 
     let peer_connector = PeerConnector::new("127.0.0.1".to_string());
 

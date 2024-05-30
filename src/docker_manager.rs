@@ -16,6 +16,7 @@ use crate::packet_client::PacketClient;
 use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
 use serde::Deserialize;
+use serde_json::Value;
 use tokio::sync::Mutex;
 
 const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
@@ -83,6 +84,36 @@ pub struct DockerContainer {
     pub key_data: ValidatorKeyData,
 }
 
+async fn check_validator_available(c: DockerContainer, docker: Docker) -> bool {
+    let exec = docker
+        .clone()
+        .create_exec(
+            c.id.clone().unwrap().as_ref(),
+            CreateExecOptions {
+                attach_stdout: Some(true),
+                cmd: Some(vec!["rippled", "server_info"]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+    if let StartExecResults::Attached { mut output, .. } =
+        docker.clone().start_exec(&exec, None).await.unwrap()
+    {
+        while let Some(Ok(msg)) = output.next().await {
+            let json_str = String::from_utf8(msg.as_ref().to_vec()).unwrap();
+            let server_info_data: Value = serde_json::from_str(json_str.as_str()).unwrap();
+            if server_info_data["result"]["status"] == "success" {
+                debug!("{} Available!", c.name.clone());
+                return true;
+            }
+            debug!("{} not available yet...", c.name.clone());
+        }
+    }
+    false
+}
+
 #[derive(Debug)]
 pub struct DockerNetwork {
     pub config: NetworkConfig,
@@ -103,6 +134,8 @@ impl DockerNetwork {
     /// them using `bollard`. The containers that were started successfully are appended to
     /// the `containers` field in the struct.
     pub async fn initialize_network(&mut self, client: Arc<Mutex<PacketClient>>) {
+        // Stop all running validator nodes before starting new network
+        self.stop_network().await;
         self.download_image().await;
 
         let validator_keys = self.generate_keys(self.config.number_of_nodes).await;
@@ -149,17 +182,49 @@ impl DockerNetwork {
     }
 
     pub async fn stop_network(&self) {
-        for c in self.containers.iter() {
-            self.docker
-                .remove_container(
-                    c.clone().id.unwrap().as_str(),
-                    Some(RemoveContainerOptions {
-                        force: true,
-                        ..Default::default()
-                    }),
-                )
-                .await
-                .unwrap();
+        let running_containers = self
+            .docker
+            .list_containers::<String>(None)
+            .await
+            .expect("Could not fetch container list from docker");
+        for container in running_containers {
+            if let Some(names) = container.names {
+                for name in names {
+                    debug!("{}", name);
+                    // Docker container names always start with a slash
+                    if name.starts_with("/validator_") || name.eq("/key_generator") {
+                        debug!(
+                            "Stopping container (auto removed): {}",
+                            container.id.clone().unwrap().as_str()
+                        );
+                        self.docker
+                            .stop_container(container.id.clone().unwrap().as_str(), None)
+                            .await
+                            .unwrap()
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn wait_for_startup(&self) {
+        let mut threads = vec![];
+        let arc = self.docker.clone();
+        for c in self.containers.clone() {
+            let _docker = arc.clone();
+            let t = tokio::spawn(async move {
+                loop {
+                    if check_validator_available(c.clone(), _docker.clone()).await {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+            });
+            threads.push(t);
+        }
+
+        for t in threads {
+            t.await.expect("Wait for startup failed for thread");
         }
     }
 
@@ -294,8 +359,31 @@ impl DockerNetwork {
             .await
             .unwrap();
 
-        //TODO: Find a better way to wait for the container to finish loading completely
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        loop {
+            if check_validator_available(
+                DockerContainer {
+                    id: Some(id.clone()),
+                    name: container_name.clone(),
+                    port_peer: 0,
+                    port_ws: 0,
+                    port_ws_admin: 0,
+                    port_rpc: 0,
+                    key_data: ValidatorKeyData {
+                        status: "success".to_string(),
+                        validation_key: "".to_string(),
+                        validation_private_key: "".to_string(),
+                        validation_public_key: "".to_string(),
+                        validation_seed: "".to_string(),
+                    },
+                },
+                self.docker.clone(),
+            )
+            .await
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
 
         let mut key_vec: Vec<ValidatorKeyData> = Vec::new();
         for _ in 0..n {
