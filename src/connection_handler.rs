@@ -10,8 +10,10 @@ use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
 const SIZE_KB: usize = 1024;
+#[allow(unused)]
 const SIZE_MB: usize = 1024 * SIZE_KB;
 const SIZE_64KB: usize = 64 * SIZE_KB;
+#[allow(unused)]
 const SIZE_64MB: usize = 64 * SIZE_MB;
 
 #[derive(Debug)]
@@ -165,7 +167,7 @@ impl Node {
 
         queue
             .send(Message::new(response.data, peer_to_port))
-            .expect(&format!(
+            .unwrap_or_else(|_| panic!(
                 "Could not write message from {} to {} to the queue.",
                 peer_from_port, peer_to_port,
             ));
@@ -190,8 +192,8 @@ impl Node {
             error!("Message did not fit in the buffer.");
         }
 
-        let message = buf[0..(6 + payload_size)].to_vec();
-        message
+        // return the full message
+        buf[0..(6 + payload_size)].to_vec()
     }
 
     /// This method polls a queue with messages.

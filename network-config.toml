@@ -2,4 +2,4 @@ base_port = 60100
 base_port_ws = 61100
 base_port_ws_admin = 62100
 base_port_rpc = 63100
-number_of_nodes = 2
+number_of_nodes = 4

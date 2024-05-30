@@ -32,7 +32,6 @@ impl PeerConnector {
         (ssl_stream_1, ssl_stream_2)
     }
 
-
     /// Sets up a connection half from a peer to another peer.
     /// Connects to the peer at ip:port.
     /// We pretend to be the other peer with its public key.
@@ -68,17 +67,23 @@ impl PeerConnector {
         ssl_stream
     }
 
+    /// This method checks given a buffered HTTP response, whether it is a valid 101 switching protocol response.
+    ///
+    /// # Panics
+    ///  This method panics if the request is not valid.
     fn check_upgrade_request_response(mut buffered_response: BytesMut) {
         if let Some(n) = buffered_response.windows(4).position(|x| x == b"\r\n\r\n") {
             let mut headers = [httparse::EMPTY_HEADER; 32];
             let mut resp = httparse::Response::new(&mut headers);
+
             let status = resp
                 .parse(&buffered_response[0..n + 4])
                 .expect("Response parse failed.");
+
             if status.is_partial() {
                 panic!("Did not fully parse the response.");
             }
-            debug!("Peer handshake response:\n{:?}", resp);
+
             let response_code = resp.code.unwrap();
 
             debug!(
@@ -107,7 +112,7 @@ impl PeerConnector {
 
             if !buffered_response.is_empty() {
                 debug!(
-                    "Switching protocol response has a body??: {}",
+                    "Switching protocol response has an (unexpected) body: {}",
                     String::from_utf8_lossy(&buffered_response).trim()
                 );
             }
@@ -151,12 +156,8 @@ impl PeerConnector {
 
 #[cfg(test)]
 mod tests {
-    use crate::connection_handler::Peer;
     use crate::peer_connector::PeerConnector;
     use bytes::BytesMut;
-    use http::{Response, StatusCode};
-    use std::io::Read;
-    use std::io::Write;
 
     #[test]
     fn upgrade_request_test() {
