@@ -170,7 +170,6 @@ impl Node {
 
         match response.action {
             0 => (),
-            u32::MAX => return,
             delay_ms => {
                 let delay_ms = delay_ms as u128;
                 let time_elapsed = read_moment.elapsed().as_millis();
