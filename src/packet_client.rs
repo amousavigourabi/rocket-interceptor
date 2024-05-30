@@ -1,5 +1,6 @@
+use crate::log;
 use crate::packet_client::proto::PacketAck;
-use log::{debug, info};
+use log::debug;
 use proto::packet_service_client::PacketServiceClient;
 use proto::{Packet, ValidatorNodeInfo};
 
@@ -38,14 +39,23 @@ impl PacketClient {
             port => port,
         };
 
-        let request = tonic::Request::new(Packet {
+        let packet = Packet {
             data: packet_data,
             from_port: packet_from_port,
             to_port: packet_to_port,
-        });
+        };
+
+        let request = tonic::Request::new(packet.clone());
 
         let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
-        info!("Response: {:?}", response);
+        log!(
+            "{:?},{},{},{:?},{}",
+            hex::encode(&packet.data),
+            packet_from_port,
+            packet_to_port,
+            hex::encode(&response.data),
+            response.action
+        );
 
         Ok(response)
     }

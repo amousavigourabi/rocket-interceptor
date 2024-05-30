@@ -1,69 +1,17 @@
 mod docker_manager;
+mod logger;
 mod packet_client;
 mod peer_connector;
 use crate::peer_connector::PeerConnector;
-use std::{env, fs};
-use std::io;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::Local;
-use env_logger::Builder;
-use fern::Dispatch;
-use log::LevelFilter;
+use std::{env, io};
 use tokio::sync::Mutex;
-
-fn setup_logger() -> Result<(), fern::InitError> {
-    // Get current timestamp
-    let now = Local::now();
-    let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string();
-
-    // Create the logs directory if it doesn't exist
-    let logs_dir = format!("./logs/{}", timestamp);
-    fs::create_dir_all(&logs_dir)?;
-
-    // Set up Dispatch for env_logger
-    let env_logger = Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{} [{}] {}: {}",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
-        .level_for("xrpl_packet_interceptor", LevelFilter::Debug)
-        .chain(std::io::stdout());
-
-    // Set up Dispatch for file logging
-    let file_logger = Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{} [{}] {}: {}",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
-        .level(LevelFilter::Info)
-        .chain(fern::log_file(Path::new(&logs_dir).join("execution.log"))?);
-
-    // Combine the two Dispatches
-    let combined_logger = Dispatch::new()
-        .chain(env_logger)
-        .chain(file_logger);
-
-    // Apply the combined logger
-    combined_logger.apply()?;
-
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    setup_logger().expect("Failed to setup logger");
+    env::set_var("RUST_LOG", "xrpl_packet_interceptor=debug");
+    env_logger::init();
 
     let client = match packet_client::PacketClient::new().await {
         Ok(client) => Arc::new(Mutex::new(client)),
