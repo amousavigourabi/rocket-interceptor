@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", "DEBUG");
+    env::set_var("RUST_LOG", "xrpl_packet_interceptor=DEBUG");
     env_logger::init();
 
     let client = match packet_client::PacketClient::new().await {
@@ -18,8 +18,15 @@ async fn main() -> io::Result<()> {
         error => panic!("Error creating client: {:?}", error),
     };
 
+    // Get config from controller
+    let network_config = client
+        .lock()
+        .await
+        .get_config()
+        .await
+        .expect("Could not get config from controller");
+
     // Init docker network
-    let network_config = docker_manager::get_config();
     let mut network = docker_manager::DockerNetwork::new(network_config);
     network.initialize_network(client.clone()).await;
 
@@ -35,8 +42,8 @@ async fn main() -> io::Result<()> {
                 .clone()
                 .connect_peers(
                     client.clone(),
-                    container1.port_peer,
-                    container2.port_peer,
+                    container1.port_peer as u16,
+                    container2.port_peer as u16,
                     container1.key_data.validation_public_key.as_str(),
                     container2.key_data.validation_public_key.as_str(),
                 )
