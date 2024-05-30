@@ -1,6 +1,8 @@
+mod connection_handler;
 mod docker_manager;
 mod packet_client;
 mod peer_connector;
+use crate::connection_handler::{Node, Peer};
 use crate::peer_connector::PeerConnector;
 use std::env;
 use std::io;
@@ -25,29 +27,42 @@ async fn main() -> io::Result<()> {
 
     let peer_connector = PeerConnector::new("127.0.0.1".to_string());
 
-    // Iterate over every unique validator node pair and create a thread for each
-    let mut threads = Vec::new();
+    let mut nodes = Vec::new();
+    for node in network.containers.iter() {
+        nodes.push(Node::new(node.port_peer));
+    }
+
+    let nodes_len = network.containers.len();
     for (i, container1) in network.containers.iter().enumerate() {
-        for container2 in &network.containers[(i + 1)..network.containers.len()] {
-            let (t1, t2) = peer_connector
-                .clone()
+        for (j, container2) in network.containers[(i + 1)..nodes_len].iter().enumerate() {
+            let j = i + 1 + j;
+            let (stream1, stream2) = peer_connector
                 .connect_peers(
-                    client.clone(),
                     container1.port_peer,
                     container2.port_peer,
                     container1.key_data.validation_public_key.as_str(),
                     container2.key_data.validation_public_key.as_str(),
                 )
                 .await;
+            let (r1, w1) = tokio::io::split(stream1);
+            let (r2, w2) = tokio::io::split(stream2);
 
-            threads.push(t1);
-            threads.push(t2);
+            let n1 = &mut nodes[i];
+            n1.add_peer(Peer::new(container2.port_peer, w2, r1));
+            let n2 = &mut nodes[j];
+            n2.add_peer(Peer::new(container1.port_peer, w1, r2));
         }
     }
 
-    // Wait for all threads to exit (due to error)
-    for t in threads {
-        t.await.expect("Thread failed");
+    let mut threads = Vec::new();
+    for node in nodes {
+        let (mut read_threads, write_thread) = node.handle_messages(client.clone());
+        threads.push(write_thread);
+        threads.append(&mut read_threads);
+    }
+
+    for thread in threads {
+        thread.await.expect("thread failed");
     }
 
     network.stop_network().await;
