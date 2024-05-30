@@ -18,14 +18,15 @@ message PacketAck {
 }
 
 message ValidatorNodeInfo {
-    uint32 ws_public_port = 1;
-    uint32 ws_admin_port = 2;
-    uint32 rpc_port = 3;
-    string status = 4;
-    string validation_key = 5;
-    string validation_private_key = 6;
-    string validation_public_key = 7;
-    string validation_seed = 8;
+    uint32 peer_port = 1;
+    uint32 ws_public_port = 2;
+    uint32 ws_admin_port = 3;
+    uint32 rpc_port = 4;
+    string status = 5;
+    string validation_key = 6;
+    string validation_private_key = 7;
+    string validation_public_key = 8;
+    string validation_seed = 9;
 }
 
 message ValidatorNodeInfoAck {

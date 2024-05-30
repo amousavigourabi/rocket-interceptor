@@ -128,6 +128,7 @@ impl DockerNetwork {
             self.start_validator(&mut validator_container).await;
             debug!("Started docker container {}", name.clone());
             validator_node_info_list.push(crate::packet_client::proto::ValidatorNodeInfo {
+                peer_port: validator_container.port_peer as u32,
                 ws_public_port: validator_container.port_ws as u32,
                 ws_admin_port: validator_container.port_ws_admin as u32,
                 rpc_port: validator_container.port_rpc as u32,
