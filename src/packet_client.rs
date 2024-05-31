@@ -1,9 +1,9 @@
 use crate::log;
+use crate::logger::EXECUTION_LOG;
 use crate::packet_client::proto::PacketAck;
 use log::debug;
 use proto::packet_service_client::PacketServiceClient;
 use proto::{Packet, ValidatorNodeInfo};
-use crate::logger::EXECUTION_LOG;
 
 pub mod proto {
     tonic::include_proto!("packet");
