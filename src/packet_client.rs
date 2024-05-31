@@ -41,18 +41,18 @@ impl PacketClient {
         };
 
         let packet = Packet {
-            data: packet_data,
+            data: packet_data.clone(),
             from_port: packet_from_port,
             to_port: packet_to_port,
         };
 
-        let request = tonic::Request::new(packet.clone());
+        let request = tonic::Request::new(packet);
 
         let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
         log!(
             EXECUTION_LOG,
-            "{:?},{},{},{:?},{}",
-            hex::encode(&packet.data),
+            "{},{},{},{},{}",
+            hex::encode(packet_data),
             packet_from_port,
             packet_to_port,
             hex::encode(&response.data),
