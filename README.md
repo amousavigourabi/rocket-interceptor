@@ -47,3 +47,9 @@ If you want to make changes to a .proto file it is important that you make the e
 python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. protos/packet.proto
 ```
 - For the interceptor you can just rebuild.
+
+### Logging
+For terminal logging we use env_logger. You can set the log level by setting the `RUST_LOG` environment variable. The levels are `trace`, `debug`, `info`, `warn`, `error`.
+
+For file logging we created a custom logger. You can create a file with a file type you specify with `create_log`. It will be kept under the `logs/[start_time]/` directory. 
+Initialize it in the lazy_static block. Then you can log to the file by calling the `log!` macro, which needs the file and string to log.

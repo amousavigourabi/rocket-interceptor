@@ -1,13 +1,13 @@
 mod connection_handler;
 mod docker_manager;
+mod logger;
 mod packet_client;
 mod peer_connector;
 use crate::connection_handler::{Node, Peer};
 use crate::packet_client::proto::Partition;
 use crate::peer_connector::PeerConnector;
-use std::env;
-use std::io;
 use std::sync::Arc;
+use std::{env, io};
 use tokio::sync::Mutex;
 
 fn is_connection_valid(idx_1: u32, idx_2: u32, partitions: &Vec<Partition>) -> bool {
