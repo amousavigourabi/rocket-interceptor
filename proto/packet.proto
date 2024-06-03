@@ -4,6 +4,7 @@ package packet;
 service PacketService {
     rpc send_packet(Packet) returns (PacketAck);
     rpc send_validator_node_info(stream ValidatorNodeInfo) returns (ValidatorNodeInfoAck);
+    rpc get_config(GetConfig) returns (Config);
 }
 
 message Packet {
@@ -31,4 +32,14 @@ message ValidatorNodeInfo {
 
 message ValidatorNodeInfoAck {
     string status = 1;
+}
+
+message GetConfig {}
+
+message Config {
+    uint32 base_port_peer = 1;
+    uint32 base_port_ws = 2;
+    uint32 base_port_ws_admin = 3;
+    uint32 base_port_rpc = 4;
+    uint32 number_of_nodes = 5;
 }

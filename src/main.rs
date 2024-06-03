@@ -20,8 +20,15 @@ async fn main() -> io::Result<()> {
         error => panic!("Error creating client: {:?}", error),
     };
 
+    // Get config from controller
+    let network_config = client
+        .lock()
+        .await
+        .get_config()
+        .await
+        .expect("Could not get config from controller");
+
     // Init docker network
-    let network_config = docker_manager::get_config();
     let mut network = docker_manager::DockerNetwork::new(network_config);
     network.initialize_network(client.clone()).await;
 
@@ -31,7 +38,7 @@ async fn main() -> io::Result<()> {
 
     let mut nodes = Vec::new();
     for node in network.containers.iter() {
-        nodes.push(Node::new(node.port_peer));
+        nodes.push(Node::new(node.port_peer as u16));
     }
 
     let nodes_len = network.containers.len();
@@ -40,8 +47,8 @@ async fn main() -> io::Result<()> {
             let j = i + 1 + j;
             let (stream1, stream2) = peer_connector
                 .connect_peers(
-                    container1.port_peer,
-                    container2.port_peer,
+                    container1.port_peer as u16,
+                    container2.port_peer as u16,
                     container1.key_data.validation_public_key.as_str(),
                     container2.key_data.validation_public_key.as_str(),
                 )
@@ -50,9 +57,9 @@ async fn main() -> io::Result<()> {
             let (r2, w2) = tokio::io::split(stream2);
 
             let n1 = &mut nodes[i];
-            n1.add_peer(Peer::new(container2.port_peer, w2, r1));
+            n1.add_peer(Peer::new(container2.port_peer as u16, w2, r1));
             let n2 = &mut nodes[j];
-            n2.add_peer(Peer::new(container1.port_peer, w1, r2));
+            n2.add_peer(Peer::new(container1.port_peer as u16, w1, r2));
         }
     }
 
