@@ -10,6 +10,13 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
+const SIZE_KB: usize = 1024;
+#[allow(unused)]
+const SIZE_MB: usize = 1024 * SIZE_KB;
+const SIZE_64KB: usize = 64 * SIZE_KB;
+#[allow(unused)]
+const SIZE_64MB: usize = 64 * SIZE_MB;
+
 #[derive(Debug)]
 pub struct Message {
     pub data: Vec<u8>,
@@ -98,8 +105,8 @@ impl Node {
         queue_sender: mpsc::Sender<Message>,
     ) {
         loop {
-            let mut buf = BytesMut::with_capacity(64 * 1024);
-            buf.resize(64 * 1024, 0);
+            let mut buf = BytesMut::with_capacity(SIZE_64KB);
+            buf.resize(SIZE_64KB, 0);
             let size_read = read_half
                 .read(buf.as_mut())
                 .await
@@ -107,9 +114,16 @@ impl Node {
 
             let read_moment = Instant::now();
 
+            buf.resize(size_read, 0);
+            if size_read == 0 {
+                panic!(
+                    "SslStream from peer {} to peer {} has been closed.",
+                    peer_from_port, peer_to_port
+                );
+            }
+
             tokio::spawn(Self::handle_message_and_action(
                 buf,
-                size_read,
                 client.clone(),
                 peer_from_port,
                 peer_to_port,
@@ -124,50 +138,20 @@ impl Node {
     /// Once the action has taken, it sends the message to a queue where another thread will
     /// immediately send the message to the corresponding peer.
     async fn handle_message_and_action(
-        mut buf: BytesMut,
-        size_read: usize,
+        buffered_message: BytesMut,
         client: Arc<Mutex<PacketClient>>,
         peer_from_port: u16,
         peer_to_port: u16,
         queue: mpsc::Sender<Message>,
         read_moment: Instant,
     ) {
-        buf.resize(size_read, 0);
-        if size_read == 0 {
-            panic!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-        }
-        let bytes = buf.to_vec();
-
-        // Check if the most significant bit turned on, indicating a compressed message
-        if bytes[0] & 0x80 != 0 {
-            error!("{:?}", bytes[0]);
-            panic!("Received compressed message");
-        }
-
-        // Check if any of the 6 most significant bits are turned on, indicating an unknown header
-        if bytes[0] & 0xFC != 0 {
-            error!("{:?}", bytes[0]);
-            panic!("Unknown version header")
-        }
-
-        let payload_size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
-
-        if payload_size > 64 * 1024 * 1024 {
-            panic!("Message size too large");
-        }
-
-        if buf.len() < 6 + payload_size {
-            error!("Buffer is too short");
-            return;
-        }
-
-        let message = bytes[0..(6 + payload_size)].to_vec();
+        let message = Self::check_message(buffered_message);
         let response = client
             .lock()
             .await
             .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
             .await
-            .expect("Error occurred while requesting message from the controller.");
+            .expect("Error occurred while requesting message and action from the controller.");
 
         match response.action {
             0 => (),
@@ -186,9 +170,32 @@ impl Node {
             .unwrap_or_else(|_| {
                 panic!(
                     "Could not write message from {} to {} to the queue.",
-                    peer_from_port, peer_to_port
+                    peer_from_port, peer_to_port,
                 )
             });
+    }
+
+    /// Checks a message that is contained inside buf if it is valid.
+    /// Returns the valid message as a Vec<u8>.
+    fn check_message(buf: BytesMut) -> Vec<u8> {
+        // Check if the most significant bit turned on, indicating a compressed message
+        if (buf[0] & 0b1000_0000) != 0 {
+            panic!("Received compressed message: bytes[0] = {:?}", buf[0]);
+        }
+
+        // Check if any of the 6 most significant bits are turned on, indicating an unknown header
+        if (buf[0] & 0b1111_1100) != 0 {
+            panic!("Unknown version header: bytes[0] = {:?}", buf[0]);
+        }
+
+        let payload_size = u32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
+
+        if buf.len() < 6 + payload_size {
+            error!("Message did not fit in the buffer.");
+        }
+
+        // return the full message
+        buf[0..(6 + payload_size)].to_vec()
     }
 
     /// This method polls a queue with messages.
@@ -211,5 +218,89 @@ impl Node {
                 .await
                 .expect("Could not write to SSL stream");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::connection_handler::{Node, SIZE_64KB, SIZE_64MB};
+    use bytes::BytesMut;
+    use rand::Rng;
+
+    fn create_dummy_payload(len: usize) -> Vec<u8> {
+        let mut payload = Vec::new();
+        let mut rng = rand::thread_rng();
+
+        for _i in 0..len {
+            payload.push(rng.gen::<u8>());
+        }
+
+        payload
+    }
+
+    fn create_header(first_six_bits: u8, payload_size: usize) -> Vec<u8> {
+        if payload_size >= SIZE_64MB {
+            panic!("Invalid payload size")
+        }
+
+        let first_six_bits = first_six_bits & 0b1111_1100;
+
+        let bytes = payload_size.to_be_bytes();
+        match bytes.len() {
+            2 => vec![first_six_bits, 0, bytes[0], bytes[1]],
+            4 => vec![first_six_bits | bytes[0], bytes[1], bytes[2], bytes[3]],
+            8 => vec![first_six_bits | bytes[4], bytes[5], bytes[6], bytes[7]],
+            _ => panic!("This should not happen"),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Received compressed message: bytes[0] = 128")]
+    fn panic_compressed_message() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 255;
+        buf.extend_from_slice(&create_header(0b1000_0000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let _message = Node::check_message(buf);
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown version header: bytes[0] = 40")]
+    fn panic_unknown_version_header() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 44;
+        buf.extend_from_slice(&create_header(0b0010_1000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let _message = Node::check_message(buf);
+    }
+
+    #[test]
+    fn pass_check_message_1() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 444;
+        buf.extend_from_slice(&create_header(0b0000_0000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let message = Node::check_message(buf);
+
+        assert_eq!(message.len(), payload_size + 6)
+    }
+
+    #[test]
+    fn pass_check_message_2() {
+        let mut buf = BytesMut::with_capacity(SIZE_64KB);
+        let payload_size: usize = 4444;
+        buf.extend_from_slice(&create_header(0b0000_0000, payload_size));
+        buf.extend_from_slice(&create_dummy_payload(payload_size));
+        buf.resize(6 + payload_size, 0);
+
+        let message = Node::check_message(buf);
+
+        assert_eq!(message.len(), payload_size + 6)
     }
 }
