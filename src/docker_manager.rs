@@ -84,6 +84,8 @@ pub struct DockerContainer {
     pub key_data: ValidatorKeyData,
 }
 
+/// Checks whether a certain `DockerContainer` is available by calling `server_info`
+/// and parsing the `success` value.
 async fn check_validator_available(c: DockerContainer, docker: Docker) -> bool {
     let exec = docker
         .clone()
@@ -181,6 +183,8 @@ impl DockerNetwork {
             .unwrap();
     }
 
+    /// Stops the docker network, by looping over all running containers (`docker ps`)
+    /// and stopping all containers that start with `validator_` or `key_generator`
     pub async fn stop_network(&self) {
         let running_containers = self
             .docker
@@ -207,8 +211,10 @@ impl DockerNetwork {
         }
     }
 
+    /// Loop over all containers in `self`, and poll them every 500ms, until
+    /// all containers are available.
     pub async fn wait_for_startup(&self) {
-        let mut threads = vec![];
+        let mut threads = vec!();
         let arc = self.docker.clone();
         for c in self.containers.clone() {
             let _docker = arc.clone();
@@ -359,6 +365,8 @@ impl DockerNetwork {
             .await
             .unwrap();
 
+        // Quick implementation of checking whether the key_generator container
+        // is available.
         loop {
             if check_validator_available(
                 DockerContainer {
@@ -385,6 +393,7 @@ impl DockerNetwork {
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
+        // Generate the keys and parse the output
         let mut key_vec: Vec<ValidatorKeyData> = Vec::new();
         for _ in 0..n {
             let exec = self
