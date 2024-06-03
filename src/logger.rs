@@ -56,7 +56,7 @@ mod tests {
     fn test_create_log() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string();
-        let filename = "test";
+        let filename = "test_create_log";
         let file_type = "log";
         let _ = create_log(&timestamp, filename, file_type);
 
@@ -71,7 +71,7 @@ mod tests {
     fn test_log_macro() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string();
-        let filename = "test";
+        let filename = "test_macro";
         let file_type = "log";
         let log_file = create_log(&timestamp, filename, file_type);
         let message = "Test message";
