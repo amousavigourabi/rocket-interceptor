@@ -26,32 +26,23 @@ impl PeerConnector {
         pub_key2: &str,
     ) -> (SslStream<TcpStream>, SslStream<TcpStream>) {
         let ssl_stream_1 =
-            Self::create_ssl_stream(self.ip_addr.as_str(), peer1_port, pub_key2).await;
+            Self::setup_connection_half(self.ip_addr.as_str(), peer1_port, pub_key2).await;
         let ssl_stream_2 =
-            Self::create_ssl_stream(self.ip_addr.as_str(), peer2_port, pub_key1).await;
+            Self::setup_connection_half(self.ip_addr.as_str(), peer2_port, pub_key1).await;
         (ssl_stream_1, ssl_stream_2)
     }
 
-    /// Create an SSL stream from a peer to another peer.
-    /// Uses the current peer's ip+port and the other peer's public key.
-    /// This ssl stream makes sure a peer sends messages to the interceptor first,
-    /// instead of sending it straight to the other peer.
-    async fn create_ssl_stream(ip: &str, port: u16, pub_key_peer_to: &str) -> SslStream<TcpStream> {
-        let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
-        let tcp_stream = match TcpStream::connect(socket_address).await {
-            Ok(tcp_stream) => tcp_stream,
-            Err(e) => panic!("{}", e),
-        };
-
-        tcp_stream.set_nodelay(true).expect("Set nodelay failed");
-        let ssl_ctx = SslContext::builder(SslMethod::tls()).unwrap().build();
-        let ssl = Ssl::new(&ssl_ctx).unwrap();
-        let mut ssl_stream = SslStream::<TcpStream>::new(ssl, tcp_stream).unwrap();
-        SslStream::connect(Pin::new(&mut ssl_stream))
-            .await
-            .expect("SSL connection failed");
-
-        let content = Self::format_upgrade_request_content(pub_key_peer_to);
+    /// Sets up a connection half from a peer to another peer.
+    /// Connects to the peer at ip:port.
+    /// We pretend to be the other peer with its public key.
+    /// This way we can intercept the connection
+    async fn setup_connection_half(
+        ip: &str,
+        port: u16,
+        pub_key_peer_we_pretend_to_be: &str,
+    ) -> SslStream<TcpStream> {
+        let mut ssl_stream = Self::create_and_connect_ssl_stream(ip, port).await;
+        let content = Self::format_upgrade_request_content(pub_key_peer_we_pretend_to_be);
         ssl_stream
             .write_all(content.as_bytes())
             .await
@@ -71,13 +62,28 @@ impl PeerConnector {
             panic!("Socket closed");
         }
 
-        if let Some(n) = buf.windows(4).position(|x| x == b"\r\n\r\n") {
+        Self::check_upgrade_request_response(buf);
+
+        ssl_stream
+    }
+
+    /// This method checks given a buffered HTTP response, whether it is a valid 101 switching protocol response.
+    ///
+    /// # Panics
+    ///  This method panics if the request is not valid.
+    fn check_upgrade_request_response(mut buffered_response: BytesMut) {
+        if let Some(n) = buffered_response.windows(4).position(|x| x == b"\r\n\r\n") {
             let mut headers = [httparse::EMPTY_HEADER; 32];
             let mut resp = httparse::Response::new(&mut headers);
-            let status = resp.parse(&buf[0..n + 4]).expect("Response parse failed");
+
+            let status = resp
+                .parse(&buffered_response[0..n + 4])
+                .expect("Response parse failed.");
+
             if status.is_partial() {
-                panic!("Invalid headers");
+                panic!("Did not fully parse the response.");
             }
+
             let response_code = resp.code.unwrap();
 
             debug!(
@@ -86,27 +92,46 @@ impl PeerConnector {
                 &response_code,
                 resp.reason.unwrap()
             );
+
             debug!("Printing response headers:");
             for header in headers.iter().filter(|h| **h != httparse::EMPTY_HEADER) {
                 debug!("{}: {}", header.name, String::from_utf8_lossy(header.value));
             }
 
-            buf.advance(n + 4);
+            buffered_response.advance(n + 4);
 
             // HTTP code 101: Switching Protocols
-            if response_code != 101 && ssl_stream.read_to_end(&mut buf.to_vec()).await.unwrap() == 0
-            {
-                debug!("Body: {}", String::from_utf8_lossy(&buf).trim());
+            if response_code != 101 {
+                panic!(
+                    "Response status code expected to be 101 but was: {}\n\
+                    Body of the response: {}",
+                    response_code,
+                    String::from_utf8_lossy(&buffered_response).trim()
+                );
             }
 
-            if !buf.is_empty() {
+            if !buffered_response.is_empty() {
                 debug!(
-                    "Current buffer is not empty?: {}",
-                    String::from_utf8_lossy(&buf).trim()
+                    "Switching protocol response has an (unexpected) body: {}",
+                    String::from_utf8_lossy(&buffered_response).trim()
                 );
-                panic!("Buffer should be empty, are the peer slots full?");
             }
+        } else {
+            panic!("Could not separate HTTP headers from body. Response is invalid.")
         }
+    }
+
+    async fn create_and_connect_ssl_stream(ip: &str, port: u16) -> SslStream<TcpStream> {
+        let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
+        let tcp_stream = TcpStream::connect(socket_address).await.unwrap();
+
+        tcp_stream.set_nodelay(true).expect("Set nodelay failed");
+        let ssl_ctx = SslContext::builder(SslMethod::tls()).unwrap().build();
+        let ssl = Ssl::new(&ssl_ctx).unwrap();
+        let mut ssl_stream = SslStream::<TcpStream>::new(ssl, tcp_stream).unwrap();
+        SslStream::connect(Pin::new(&mut ssl_stream))
+            .await
+            .expect("SSL connection failed");
 
         ssl_stream
     }
@@ -126,5 +151,80 @@ impl PeerConnector {
             \r\n",
             pub_key_peer_to
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::peer_connector::PeerConnector;
+    use bytes::BytesMut;
+
+    #[test]
+    fn upgrade_request_test() {
+        let expected = String::from(
+            "\
+            GET / HTTP/1.1\r\n\
+            Upgrade: XRPL/2.2\r\n\
+            Connection: Upgrade\r\n\
+            Connect-As: Peer\r\n\
+            Public-Key: 123456789abcdefg\r\n\
+            Session-Signature: a\r\n\
+            \r\n",
+        );
+        assert_eq!(
+            expected,
+            PeerConnector::format_upgrade_request_content("123456789abcdefg"),
+        )
+    }
+
+    #[test]
+    fn check_upgrade_request_response_no_panic() {
+        let response = b"\
+            HTTP/1.1 101 Switching Protocol\r\n
+            Connection: Upgrade\r\n\
+            Upgrade: XRPL/2.2\r\n
+            Connect-As: Peer\r\n
+            Server: rippled-2.1.1\r\n
+            Crawl: private\r\n
+            X-Protocol-Ctl:\r\n
+            Network-Time: 770391649\r\n
+            Public-Key: n9M1Fh52PBMSrEjjs8Y64EmU8hfVzb29BBDaXoVNS3AaC1gM19CP\r\n
+            Session-Signature: MEUCIQCBsA3JThSv4geQ67ZlrLvBZGO0wiWWU5pfDsiKalvwKQIgb6CuAHAYnxGf4MYB4Jgsbox4of5GxT4IbRPWablVQ9w=\r\n
+            Instance-Cookie: 16110088623413850902\r\n
+            Closed-Ledger: 2D7DE9661AADBCDC6DD6630F0C616F5BE29803A5A5DC31486DD65E0F6A79DDB1\r\n
+            Previous-Ledger: 0000000000000000000000000000000000000000000000000000000000000000\r\n\r\n
+        ";
+
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(response);
+        PeerConnector::check_upgrade_request_response(buf);
+    }
+
+    #[test]
+    #[should_panic(expected = "Response parse failed.")]
+    fn check_upgrade_request_response_invalid_request() {
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(b"garbage\r\n\r\n");
+        PeerConnector::check_upgrade_request_response(buf);
+    }
+
+    #[test]
+    #[should_panic(expected = "Could not separate HTTP headers from body. Response is invalid.")]
+    fn check_upgrade_request_response_invalid_response() {
+        let mut buf = BytesMut::new();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+        buf.extend_from_slice(&data);
+        PeerConnector::check_upgrade_request_response(buf);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Response status code expected to be 101 but was: 404\nBody of the response: <body message>"
+    )]
+    fn check_upgrade_request_response_wrong_status_code() {
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(b"HTTP/1.1 404 Not Found\r\n\r\n<body message>");
+
+        PeerConnector::check_upgrade_request_response(buf);
     }
 }
