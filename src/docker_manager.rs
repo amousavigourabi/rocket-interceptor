@@ -214,7 +214,7 @@ impl DockerNetwork {
     /// Loop over all containers in `self`, and poll them every 500ms, until
     /// all containers are available.
     pub async fn wait_for_startup(&self) {
-        let mut threads = vec!();
+        let mut threads = vec![];
         let arc = self.docker.clone();
         for c in self.containers.clone() {
             let _docker = arc.clone();
