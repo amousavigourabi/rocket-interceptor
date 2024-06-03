@@ -36,10 +36,15 @@ message ValidatorNodeInfoAck {
 
 message GetConfig {}
 
+message Partition {
+    repeated uint32 nodes = 1;
+}
+
 message Config {
     uint32 base_port_peer = 1;
     uint32 base_port_ws = 2;
     uint32 base_port_ws_admin = 3;
     uint32 base_port_rpc = 4;
     uint32 number_of_nodes = 5;
+    repeated Partition partitions = 6;
 }

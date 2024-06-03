@@ -3,11 +3,21 @@ mod docker_manager;
 mod packet_client;
 mod peer_connector;
 use crate::connection_handler::{Node, Peer};
+use crate::packet_client::proto::Partition;
 use crate::peer_connector::PeerConnector;
 use std::env;
 use std::io;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+fn is_connection_valid(idx_1: u32, idx_2: u32, partitions: &Vec<Partition>) -> bool {
+    for p in partitions {
+        if p.nodes.contains(&idx_1) && p.nodes.contains(&idx_2) {
+            return true;
+        }
+    }
+    false
+}
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -28,7 +38,7 @@ async fn main() -> io::Result<()> {
         .expect("Could not get config from controller");
 
     // Init docker network
-    let mut network = docker_manager::DockerNetwork::new(network_config);
+    let mut network = docker_manager::DockerNetwork::new(network_config.clone());
     network.initialize_network(client.clone()).await;
     network.wait_for_startup().await;
 
@@ -43,6 +53,9 @@ async fn main() -> io::Result<()> {
     for (i, container1) in network.containers.iter().enumerate() {
         for (j, container2) in network.containers[(i + 1)..nodes_len].iter().enumerate() {
             let j = i + 1 + j;
+            if !is_connection_valid(i as u32, j as u32, network_config.partitions.as_ref()) {
+                continue;
+            }
             let (stream1, stream2) = peer_connector
                 .connect_peers(
                     container1.port_peer as u16,
