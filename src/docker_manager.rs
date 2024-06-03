@@ -1,17 +1,18 @@
-use log::{debug, warn};
+use log::debug;
 use std::env::current_dir;
 use std::fs;
 use std::io::Read;
-use std::io::{ErrorKind, Write};
+use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
-use bollard::container::{Config, CreateContainerOptions, RemoveContainerOptions};
+use bollard::container::{CreateContainerOptions, RemoveContainerOptions};
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
 use bollard::Docker;
 
+use crate::packet_client::proto;
 use crate::packet_client::PacketClient;
 use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
@@ -19,44 +20,6 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
-
-#[derive(Debug, Deserialize)]
-pub struct NetworkConfig {
-    pub base_port: Option<u16>,
-    base_port_ws: Option<u16>,
-    base_port_ws_admin: Option<u16>,
-    base_port_rpc: Option<u16>,
-    number_of_nodes: u16,
-}
-
-/// Reads the `network-config.toml` file and returns a parsed `NetworkConfig` struct.
-///
-/// # Panics
-/// This function panics if there is an error with reading the config file, or
-/// if the configuration does not adhere to the correct format.
-pub fn get_config() -> NetworkConfig {
-    let config_file = "network-config.toml";
-    let contents = match fs::read_to_string(config_file) {
-        Ok(c) => c,
-        Err(e) => match e.kind() {
-            ErrorKind::NotFound => {
-                warn!("'network-config.toml' file not found, defaulting to a network of 2 nodes.");
-                String::from("number_of_nodes = 2")
-            }
-            _ => {
-                panic!("Could not read config file `{}`", config_file);
-            }
-        },
-    };
-
-    let network_config: NetworkConfig = match toml::from_str(&contents) {
-        Ok(d) => d,
-        Err(_) => {
-            panic!("Unable to parse config file `{}`", config_file);
-        }
-    };
-    network_config
-}
 
 #[derive(Debug, Deserialize)]
 struct ValidationKeyCreateResponse {
@@ -76,22 +39,22 @@ pub struct ValidatorKeyData {
 pub struct DockerContainer {
     pub id: Option<String>,
     pub name: String,
-    pub port_peer: u16,
-    pub port_ws: u16,
-    pub port_ws_admin: u16,
-    pub port_rpc: u16,
+    pub port_peer: u32,
+    pub port_ws: u32,
+    pub port_ws_admin: u32,
+    pub port_rpc: u32,
     pub key_data: ValidatorKeyData,
 }
 
 #[derive(Debug)]
 pub struct DockerNetwork {
-    pub config: NetworkConfig,
+    pub config: proto::Config,
     pub containers: Vec<DockerContainer>,
     docker: Docker,
 }
 
 impl DockerNetwork {
-    pub fn new(config: NetworkConfig) -> DockerNetwork {
+    pub fn new(config: proto::Config) -> DockerNetwork {
         DockerNetwork {
             config,
             containers: Vec::new(),
@@ -105,13 +68,13 @@ impl DockerNetwork {
     pub async fn initialize_network(&mut self, client: Arc<Mutex<PacketClient>>) {
         self.download_image().await;
 
-        let validator_keys = self.generate_keys(self.config.number_of_nodes).await;
+        let validator_keys = self.generate_keys(self.config.number_of_nodes as u16).await;
         let names_with_keys = self.generate_validator_configs(&validator_keys);
 
-        let base_port_peer = self.config.base_port.unwrap_or(60000);
-        let base_port_ws = self.config.base_port_ws.unwrap_or(61000);
-        let base_port_ws_admin = self.config.base_port_ws_admin.unwrap_or(62000);
-        let base_port_rpc = self.config.base_port_rpc.unwrap_or(63000);
+        let base_port_peer = self.config.base_port_peer;
+        let base_port_ws = self.config.base_port_ws;
+        let base_port_ws_admin = self.config.base_port_ws_admin;
+        let base_port_rpc = self.config.base_port_rpc;
 
         let mut validator_node_info_list = vec![];
 
@@ -119,19 +82,19 @@ impl DockerNetwork {
             let mut validator_container = DockerContainer {
                 id: None,
                 name: name.clone(),
-                port_peer: base_port_peer + i as u16,
-                port_ws: base_port_ws + i as u16,
-                port_ws_admin: base_port_ws_admin + i as u16,
-                port_rpc: base_port_rpc + i as u16,
+                port_peer: base_port_peer + i as u32,
+                port_ws: base_port_ws + i as u32,
+                port_ws_admin: base_port_ws_admin + i as u32,
+                port_rpc: base_port_rpc + i as u32,
                 key_data: keys.clone(),
             };
             self.start_validator(&mut validator_container).await;
             debug!("Started docker container {}", name.clone());
-            validator_node_info_list.push(crate::packet_client::proto::ValidatorNodeInfo {
-                peer_port: validator_container.port_peer as u32,
-                ws_public_port: validator_container.port_ws as u32,
-                ws_admin_port: validator_container.port_ws_admin as u32,
-                rpc_port: validator_container.port_rpc as u32,
+            validator_node_info_list.push(proto::ValidatorNodeInfo {
+                peer_port: validator_container.port_peer,
+                ws_public_port: validator_container.port_ws,
+                ws_admin_port: validator_container.port_ws_admin,
+                rpc_port: validator_container.port_rpc,
                 status: validator_container.key_data.status.clone(),
                 validation_key: validator_container.key_data.validation_public_key.clone(),
                 validation_private_key: validator_container.key_data.validation_private_key.clone(),
@@ -214,7 +177,7 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let container_config = Config {
+        let container_config = bollard::container::Config {
             image: Some(IMAGE),
             env: Some(vec![
                 "ENV_ARGS=--start --ledgerfile /etc/opt/ripple/ledger.json",
@@ -263,7 +226,7 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let container_config = Config {
+        let container_config = bollard::container::Config {
             image: Some(IMAGE),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),

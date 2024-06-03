@@ -1,6 +1,6 @@
 use crate::log;
 use crate::logger::EXECUTION_LOG;
-use crate::packet_client::proto::PacketAck;
+use crate::packet_client::proto::{Config, GetConfig, PacketAck};
 use log::debug;
 use proto::packet_service_client::PacketServiceClient;
 use proto::{Packet, ValidatorNodeInfo};
@@ -75,6 +75,14 @@ impl PacketClient {
         debug!("Response: {:?}", response);
 
         Ok(response.status)
+    }
+
+    pub async fn get_config(&mut self) -> Result<Config, Box<dyn std::error::Error>> {
+        let request = tonic::Request::new(GetConfig {});
+        let response = self.client.get_config(request).await?.into_inner();
+        debug!("Response: {:?}", response);
+
+        Ok(response)
     }
 }
 
