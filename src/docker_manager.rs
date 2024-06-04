@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, info};
 use std::env::current_dir;
 use std::fs;
 use std::io::Read;
@@ -124,7 +124,7 @@ impl DockerNetwork {
                 key_data: keys.clone(),
             };
             self.start_validator(&mut validator_container).await;
-            debug!("Started docker container {}", name.clone());
+            info!("Started docker container {}", name.clone());
             validator_node_info_list.push(proto::ValidatorNodeInfo {
                 peer_port: validator_container.port_peer,
                 ws_public_port: validator_container.port_ws,

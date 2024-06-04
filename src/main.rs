@@ -21,7 +21,7 @@ fn is_connection_valid(idx_1: u32, idx_2: u32, partitions: &Vec<Partition>) -> b
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", "xrpl_packet_interceptor=DEBUG");
+    env::set_var("RUST_LOG", "xrpl_packet_interceptor=info");
     env_logger::init();
 
     let client = match packet_client::PacketClient::new().await {
