@@ -1,7 +1,7 @@
 use crate::log;
 use crate::logger::EXECUTION_LOG;
 use crate::packet_client::proto::{Config, GetConfig, PacketAck};
-use log::{debug, info};
+use log::info;
 use proto::packet_service_client::PacketServiceClient;
 use proto::{Packet, ValidatorNodeInfo};
 
