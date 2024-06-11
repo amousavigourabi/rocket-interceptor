@@ -155,7 +155,7 @@ impl PeerConnector {
 }
 
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use crate::peer_connector::PeerConnector;
     use bytes::BytesMut;
 

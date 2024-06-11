@@ -222,7 +222,7 @@ impl Node {
 }
 
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use crate::connection_handler::{Node, SIZE_64KB, SIZE_64MB};
     use bytes::BytesMut;
     use rand::Rng;

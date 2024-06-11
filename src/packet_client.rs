@@ -88,7 +88,7 @@ impl PacketClient {
 
 //Test work but need the python server to be running, skipped for now
 #[cfg(test)]
-mod integration_tests {
+mod fail_tests {
     use super::*;
     async fn setup() -> PacketClient {
         PacketClient::new().await.unwrap()

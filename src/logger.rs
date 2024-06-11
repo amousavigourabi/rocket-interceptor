@@ -43,7 +43,7 @@ pub fn log(file: &Mutex<std::fs::File>, message: &str) {
 }
 
 #[cfg(test)]
-mod tests {
+mod integration_tests {
     use super::*;
     use std::fs;
     use std::io::Read;

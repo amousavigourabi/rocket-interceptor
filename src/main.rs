@@ -6,9 +6,12 @@ mod peer_connector;
 use crate::connection_handler::{Node, Peer};
 use crate::packet_client::proto::Partition;
 use crate::peer_connector::PeerConnector;
+use log::info;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{env, io};
 use tokio::sync::Mutex;
+use tokio::time::error::Elapsed;
 
 fn is_connection_valid(idx_1: u32, idx_2: u32, partitions: &Vec<Partition>) -> bool {
     for p in partitions {
@@ -74,18 +77,29 @@ async fn main() -> io::Result<()> {
         }
     }
 
-    let mut threads = Vec::new();
-    for node in nodes {
-        let (mut read_threads, write_thread) = node.handle_messages(client.clone());
-        threads.push(write_thread);
-        threads.append(&mut read_threads);
+    let result = tokio::time::timeout(Duration::from_secs(60), async {
+        let mut threads = Vec::new();
+        for node in nodes {
+            let (mut read_threads, write_thread) = node.handle_messages(client.clone());
+            threads.push(write_thread);
+            threads.append(&mut read_threads);
+        }
+
+        for thread in threads {
+            thread.await.expect("thread failed");
+        }
+
+        network.stop_network().await;
+    })
+    .await;
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) => match e {
+            elapsed => {
+                info!("Timeout reached");
+                Ok(())
+            }
+        },
     }
-
-    for thread in threads {
-        thread.await.expect("thread failed");
-    }
-
-    network.stop_network().await;
-
-    Ok(())
 }
