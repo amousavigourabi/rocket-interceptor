@@ -57,6 +57,12 @@ Initialize it in the lazy_static block. Then you can log to the file by calling 
 ### Testing
 To make a coverage report you can run the following command with the nightly toolchain:
 ```
-cargo llvm-cov nextest -E 'not (test(/unit*|fail*/))' --branch --open 
+cargo llvm-cov nextest -E 'not (test(/unit*|integration*|fail*/))' --branch --open 
 ```
 You can run it with `unit*` `integration*` or `fail*` in the regex to filter out the tests you want to include in the report.
+
+For the manual tests you can first start the controller and then run the following command:
+```
+cargo llvm-cov run --branch --open
+```
+You need to make sure main will terminate without any errors to get the coverage report. To do this you can wrap all the threads in a timeout and handle the error accordingly.

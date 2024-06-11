@@ -11,7 +11,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{env, io};
 use tokio::sync::Mutex;
-use tokio::time::error::Elapsed;
 
 fn is_connection_valid(idx_1: u32, idx_2: u32, partitions: &Vec<Partition>) -> bool {
     for p in partitions {
@@ -95,11 +94,9 @@ async fn main() -> io::Result<()> {
 
     match result {
         Ok(_) => Ok(()),
-        Err(e) => match e {
-            elapsed => {
-                info!("Timeout reached");
-                Ok(())
-            }
-        },
+        Err(_) => {
+            info!("Timeout reached");
+            Ok(())
+        }
     }
 }
