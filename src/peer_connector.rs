@@ -160,6 +160,12 @@ mod unit_tests {
     use bytes::BytesMut;
 
     #[test]
+    fn peer_connector_new_test() {
+        let peer_connector = PeerConnector::new("127.0.0.1".to_string());
+        assert_eq!(peer_connector.ip_addr, "127.0.0.1".to_string());
+    }
+
+    #[test]
     fn upgrade_request_test() {
         let expected = String::from(
             "\

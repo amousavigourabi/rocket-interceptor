@@ -223,9 +223,28 @@ impl Node {
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::connection_handler::{Node, SIZE_64KB, SIZE_64MB};
+    use crate::connection_handler::{Message, Node, SIZE_64KB, SIZE_64MB};
     use bytes::BytesMut;
     use rand::Rng;
+
+    #[test]
+    fn test_message_new() {
+        let data = vec![1, 2, 3, 4, 5];
+        let peer_to_port = 8080;
+        let message = Message::new(data.clone(), peer_to_port);
+
+        assert_eq!(message.data, data);
+        assert_eq!(message.peer_to_port, peer_to_port);
+    }
+
+    #[test]
+    fn test_node_new() {
+        let port = 8080;
+        let node = Node::new(port);
+
+        assert_eq!(node.port, port);
+        assert_eq!(node.peers.len(), 0);
+    }
 
     fn create_dummy_payload(len: usize) -> Vec<u8> {
         let mut payload = Vec::new();
