@@ -43,7 +43,7 @@ tests:
   extends: .install_dependencies
   script:
     - curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-    - cargo nextest run --profile ci -E 'not (test(/integration*/))'
+    - cargo nextest run --profile ci -E 'not (test(/fail*/))'
     - mv target/nextest/ci/junit.xml .
   artifacts:
     when: always

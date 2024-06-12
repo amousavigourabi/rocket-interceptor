@@ -6,9 +6,7 @@ mod peer_connector;
 use crate::connection_handler::{Node, Peer};
 use crate::packet_client::proto::Partition;
 use crate::peer_connector::PeerConnector;
-use log::info;
 use std::sync::Arc;
-use std::time::Duration;
 use std::{env, io};
 use tokio::sync::Mutex;
 
@@ -76,27 +74,17 @@ async fn main() -> io::Result<()> {
         }
     }
 
-    let result = tokio::time::timeout(Duration::from_secs(60), async {
-        let mut threads = Vec::new();
-        for node in nodes {
-            let (mut read_threads, write_thread) = node.handle_messages(client.clone());
-            threads.push(write_thread);
-            threads.append(&mut read_threads);
-        }
-
-        for thread in threads {
-            thread.await.expect("thread failed");
-        }
-
-        network.stop_network().await;
-    })
-    .await;
-
-    match result {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            info!("Timeout reached");
-            Ok(())
-        }
+    let mut threads = Vec::new();
+    for node in nodes {
+        let (mut read_threads, write_thread) = node.handle_messages(client.clone());
+        threads.push(write_thread);
+        threads.append(&mut read_threads);
     }
+
+    for thread in threads {
+        thread.await.expect("thread failed");
+    }
+
+    network.stop_network().await;
+    Ok(())
 }

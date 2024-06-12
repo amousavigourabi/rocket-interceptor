@@ -54,9 +54,11 @@ For terminal logging we use env_logger. You can set the log level by setting the
 For file logging we created a custom logger. You can create a file with a file type you specify with `create_log`. It will be kept under the `logs/[start_time]/` directory. 
 Initialize it in the lazy_static block. Then you can log to the file by calling the `log!` macro, which needs the file and string to log.
 
-### Testing
-To make a coverage report you can run the following command with the nightly toolchain:
+### Generating testing reports
+To make a coverage report you can run the following:
 ```
+cargo install cargo-llvm-cov --locked   # This is only needed the first time
+rustup default nightly                  # switch to nightly since the branch coverage is not available in stable
 cargo llvm-cov nextest -E 'not (test(/unit*|integration*|fail*/))' --branch --open 
 ```
 You can run it with `unit*` `integration*` or `fail*` in the regex to filter out the tests you want to include in the report.
@@ -65,4 +67,5 @@ For the manual tests you can first start the controller and then run the followi
 ```
 cargo llvm-cov run --branch --open
 ```
-You need to make sure main will terminate without any errors to get the coverage report. To do this you can wrap all the threads in a timeout and handle the error accordingly.
+You need to make sure main will terminate without any errors to get the coverage report. 
+To do this you can wrap all the threads in a timeout and handle the error accordingly.
