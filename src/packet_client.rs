@@ -89,8 +89,8 @@ impl PacketClient {
 //Test work but need the python server to be running, skipped for now
 #[cfg(test)]
 mod integration_tests_grpc {
-    use crate::packet_client::proto::Partition;
     use super::*;
+    use crate::packet_client::proto::Partition;
     async fn setup() -> PacketClient {
         PacketClient::new().await.unwrap()
     }
@@ -157,11 +157,15 @@ mod integration_tests_grpc {
             rpc_port: 63000,
             status: "active".to_string(),
             validation_key: "READ SOIL DASH FUND ISLE LEN SOD OUT MACE ERIC DRAG MILT".to_string(),
-            validation_private_key: "paAgnNZ9NaKTACGT3dGBV2eNHRxXNo8hRhNQNEWRJ23m5isp93t".to_string(),
-            validation_public_key: "n9KjTKEaHJ12Kuon5PDZ7fQAo5ExZ6cKH4h3L8q6m9YhoYqeBDho".to_string(),
+            validation_private_key: "paAgnNZ9NaKTACGT3dGBV2eNHRxXNo8hRhNQNEWRJ23m5isp93t"
+                .to_string(),
+            validation_public_key: "n9KjTKEaHJ12Kuon5PDZ7fQAo5ExZ6cKH4h3L8q6m9YhoYqeBDho"
+                .to_string(),
             validation_seed: "shM8uxbqE5g43G3VwKt6TM2pLvFan".to_string(),
         }];
-        let result = client.send_validator_node_info(validator_node_info_list).await;
+        let result = client
+            .send_validator_node_info(validator_node_info_list)
+            .await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Received validator node info".to_string());
     }
