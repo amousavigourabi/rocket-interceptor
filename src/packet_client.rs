@@ -86,7 +86,7 @@ impl PacketClient {
     }
 }
 
-//Test work but need the python server to be running, skipped for now
+// Note: these tests require the controller to be running
 #[cfg(test)]
 mod integration_tests_grpc {
     use super::*;

@@ -54,16 +54,28 @@ For terminal logging we use env_logger. You can set the log level by setting the
 For file logging we created a custom logger. You can create a file with a file type you specify with `create_log`. It will be kept under the `logs/[start_time]/` directory. 
 Initialize it in the lazy_static block. Then you can log to the file by calling the `log!` macro, which needs the file and string to log.
 
-### Generating testing reports
+### Testing
+
+#### Running tests
+To run the tests you can use the following command:
+```
+cargo nextest -E 'not (test(/grpc|docker/))'  
+```
+This will run all the tests except the integration tests that depend on grpc and docker.
+To run the grpc tests in `packet_client.rs` you need to have the controller running with all strategy args to `False`.
+To run the `test_initialize_network` test in `docker_manager.rs` you need to have a docker engine running on your machine in addition to the controller with all strategy args to `False`.
+If you want to run multiple integration tests that use shared resources (grpc client and docker engine), you need to run them sequentially. You can do this by adding the `--test-threads=1` flag to the command.
+
+#### Generating testing reports
 To make a coverage report you can run the following:
 ```
 cargo install cargo-llvm-cov --locked   # This is only needed the first time
 rustup default nightly                  # switch to nightly since the branch coverage is not available in stable
-cargo llvm-cov nextest -E 'not (test(/unit*|integration*|fail*/))' --branch --open 
+cargo llvm-cov nextest -E 'not (test(/integration/))' --branch --open 
 ```
-You can run it with `unit*` `integration*` or `fail*` in the regex to filter out the tests you want to include in the report.
+You can use nextest [filter options](https://nexte.st/docs/filtersets/) to filter out the tests you do not want to include in the report.
 
-For the manual tests you can first start the controller and then run the following command:
+For the manual tests you can first start the controller and the docker engine and then run the following command:
 ```
 cargo llvm-cov run --branch --open
 ```
