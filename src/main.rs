@@ -4,8 +4,10 @@ mod logger;
 mod packet_client;
 mod peer_connector;
 use crate::connection_handler::{Node, Peer};
+use crate::docker_manager::DockerNetwork;
 use crate::packet_client::proto::Partition;
 use crate::peer_connector::PeerConnector;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{env, io};
 use tokio::sync::Mutex;
@@ -21,6 +23,14 @@ fn is_connection_valid(idx_1: u32, idx_2: u32, partitions: &Vec<Partition>) -> b
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Unable to set Ctrl+C handler");
+
     env::set_var("RUST_LOG", "xrpl_packet_interceptor=info");
     env_logger::init();
 
@@ -38,7 +48,7 @@ async fn main() -> io::Result<()> {
         .expect("Could not get config from controller");
 
     // Init docker network
-    let mut network = docker_manager::DockerNetwork::new(network_config.clone());
+    let mut network = DockerNetwork::new(network_config.clone());
     network.initialize_network(client.clone()).await;
     network.wait_for_startup().await;
 
@@ -81,8 +91,10 @@ async fn main() -> io::Result<()> {
         threads.append(&mut read_threads);
     }
 
+    while running.load(Ordering::SeqCst) {}
+
     for thread in threads {
-        thread.await.expect("thread failed");
+        thread.abort();
     }
 
     network.stop_network().await;
