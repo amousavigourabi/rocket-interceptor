@@ -131,7 +131,7 @@ impl DockerNetwork {
                 ws_admin_port: validator_container.port_ws_admin,
                 rpc_port: validator_container.port_rpc,
                 status: validator_container.key_data.status.clone(),
-                validation_key: validator_container.key_data.validation_public_key.clone(),
+                validation_key: validator_container.key_data.validation_key.clone(),
                 validation_private_key: validator_container.key_data.validation_private_key.clone(),
                 validation_public_key: validator_container.key_data.validation_public_key.clone(),
                 validation_seed: validator_container.key_data.validation_seed.clone(),
