@@ -8,10 +8,13 @@
 - OpenSSL
 - Docker (for Windows and macOS: make sure Docker Engine is active by launching Docker Desktop)
 
-### Running the build
+### Building the executable
+
 ```console
 cargo build --release
 ```
+
+The executable can be found in the folder `target/release`.
 
 ## How to contribute
 1. Create a new branch from `main`
