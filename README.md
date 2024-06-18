@@ -59,21 +59,42 @@ Initialize it in the lazy_static block. Then you can log to the file by calling 
 #### Running tests
 To run the tests you can use the following command:
 ```
-cargo nextest -E 'not (test(/grpc|docker/))'  
+cargo nextest run -E 'not (test(/grpc|docker/))'  
 ```
 This will run all the tests except the integration tests that depend on grpc and docker.
+You can use nextest [filter options](https://nexte.st/docs/filtersets/) to filter out the tests you do not want to run, it is basically a regex that matches the test module names.
+
 To run the grpc tests in `packet_client.rs` you need to have the controller running with all strategy args to `False`.
 To run the `test_initialize_network` test in `docker_manager.rs` you need to have a docker engine running on your machine in addition to the controller with all strategy args to `False`.
 If you want to run multiple integration tests that use shared resources (grpc client and docker engine), you need to run them sequentially. You can do this by adding the `--test-threads=1` flag to the command.
+So in short, to run all the tests you can run the following command with the controller and docker engine running on your machine:
+```
+cargo nextest run --test-threads=1
+```
+
 
 #### Generating testing reports
-To make a coverage report you can run the following:
+`llvm-cov` is used to generate coverage reports:
 ```
 cargo install cargo-llvm-cov --locked   # This is only needed the first time
+```
+The branch coverage is not available in stable rust, so you need to switch to nightly for that.
+For this reason generating line coverage is explained firstly. Then, generating coverage reports with branch coverage is explained.
+
+##### Line coverage
+To run the tests in stable rust with coverage you can use the following command:
+```
+cargo llvm-cov nextest -E 'not (test(/integration/))' --open 
+```
+Notice: it is the same as running the tests without coverage, but with the `llvm-cov nextest` command instead of `nextest run`. Refer to the section above for more information on running the tests.
+
+##### Branch coverage
+To make a coverage report with branch coverage you can run the following:
+```
 rustup default nightly                  # switch to nightly since the branch coverage is not available in stable
 cargo llvm-cov nextest -E 'not (test(/integration/))' --branch --open 
 ```
-You can use nextest [filter options](https://nexte.st/docs/filtersets/) to filter out the tests you do not want to include in the report.
+
 
 For the manual tests you can first start the controller and the docker engine and then run the following command:
 ```
