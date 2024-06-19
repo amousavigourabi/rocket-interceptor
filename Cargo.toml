@@ -33,8 +33,3 @@ ctrlc = "3.4.4"
 
 [build-dependencies]
 tonic-build = "0.11.0"
-
-[features]
-default = []
-nightly-features = ["exclude-coverage"]
-exclude-coverage = []

@@ -1,4 +1,4 @@
-#![cfg_attr(all(feature = "nightly-features", test), feature(coverage_attribute))]
+// #![feature(coverage_attribute)]
 mod connection_handler;
 mod docker_manager;
 mod logger;

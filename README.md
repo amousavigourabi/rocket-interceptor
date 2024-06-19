@@ -81,7 +81,8 @@ cargo install cargo-llvm-cov --locked   # This is only needed the first time
 Branch coverage and excluding coverage are not available in stable rust, so you need to switch to nightly for that.
 For this reason generating line coverage is explained firstly. 
 Then, generating coverage reports with branch coverage is explained.
-Lastly, excluding coverage for tests is explained.
+After that, excluding coverage for tests is explained.
+Lastly, running the manual tests with coverage is explained.
 
 ##### Line coverage
 To run the tests in stable rust with coverage you can use the following command:
@@ -93,18 +94,15 @@ Notice: it is the same as running the tests without coverage, but with the `llvm
 ##### Branch coverage
 To make a coverage report with branch coverage you can run the following:
 ```
-rustup default nightly                  # switch to nightly since the branch coverage is not available in stable
-cargo llvm-cov nextest -E 'not (test(/integration/))' --branch --open 
+rustup install nightly   # This is only needed the first time
+cargo +nightly llvm-cov nextest -E 'not (test(/integration/))' --branch --open 
 ```
 
 ##### Exclude coverage for tests
 By default, the coverage report includes the coverage of the tests. This generally not desired since the tests are not part of the codebase.
-In nightly there is the `#[coverage(off)]` coverage attribute that can be used to exclude the tests from the coverage report. It does not completely work with `#[tokio::test]` tests to my knowledge but it is still useful.
-An `exlcude-coverage` feature is made in this project to exclude the tests from the coverage report. To use this feature you need to be in nightly and use the --features nightly-features flag:
-```
-rustup default nightly                  # switch to nightly since the excluding coverage is not available in stable
-cargo llvm-cov nextest -E 'not (test(/integration/))' --branch --open --features nightly-features
-```
+In nightly there is the `// #[coverage(off)]` coverage attribute that can be used to exclude the tests from the coverage report. It does not completely work with `#[tokio::test]` tests to my knowledge, but it is still useful.
+So to run the tests without the coverage of the tests you need to use nightly and put `#![feature(coverage_attribute)]` at top of `main.rs`. And put `// #[coverage(off)]` above the tests you want to exclude from the coverage report.
+For convenience these are already added as comments where necessary in the codebase. You can uncomment all of these and run the tests as normal. For RustRover you can replace all the `// // #[coverage(off)]` comments with `// #[coverage(off)]` in one go with ctrl+shift+R.
 
 ##### Manual tests
 For the manual tests you can first start the controller and the docker engine and then run the following command:
