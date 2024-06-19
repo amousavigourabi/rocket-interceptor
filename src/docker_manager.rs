@@ -489,6 +489,7 @@ mod integration_tests_docker {
     // Note: This test requires running a docker engine in clean state
     // Tests the generate_keys function; assert that the keys are generated and the container is removed
     #[tokio::test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     async fn test_generate_keys() {
         let docker_network = docker_network_setup();
         assert_eq!(
@@ -517,6 +518,7 @@ mod integration_tests_docker {
 
     // Tests the generate_validator_configs function; assert that the config files are correctly created
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     fn test_generate_validator_configs() {
         let keys = vec![
             ValidatorKeyData {
@@ -603,6 +605,7 @@ mod integration_tests_docker {
     // Tests the initialize_network function; assert that the network is correctly initialized with the correct amount of nodes and names.
     // Also tests the stop_network function
     #[tokio::test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     async fn test_initialize_network() {
         let mut docker_network = docker_network_setup();
         assert_eq!(

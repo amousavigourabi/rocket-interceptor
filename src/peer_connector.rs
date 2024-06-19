@@ -160,12 +160,14 @@ mod unit_tests {
     use bytes::BytesMut;
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     fn peer_connector_new_test() {
         let peer_connector = PeerConnector::new("127.0.0.1".to_string());
         assert_eq!(peer_connector.ip_addr, "127.0.0.1".to_string());
     }
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     fn upgrade_request_test() {
         let expected = String::from(
             "\
@@ -184,6 +186,7 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     fn check_upgrade_request_response_no_panic() {
         let response = b"\
             HTTP/1.1 101 Switching Protocol\r\n
@@ -207,6 +210,7 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     #[should_panic(expected = "Response parse failed.")]
     fn check_upgrade_request_response_invalid_request() {
         let mut buf = BytesMut::new();
@@ -215,6 +219,7 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     #[should_panic(expected = "Could not separate HTTP headers from body. Response is invalid.")]
     fn check_upgrade_request_response_invalid_response() {
         let mut buf = BytesMut::new();
@@ -224,6 +229,7 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     #[should_panic(
         expected = "Response status code expected to be 101 but was: 404\nBody of the response: <body message>"
     )]

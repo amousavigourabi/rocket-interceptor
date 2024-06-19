@@ -78,8 +78,10 @@ cargo nextest run --test-threads=1
 ```
 cargo install cargo-llvm-cov --locked   # This is only needed the first time
 ```
-The branch coverage is not available in stable rust, so you need to switch to nightly for that.
-For this reason generating line coverage is explained firstly. Then, generating coverage reports with branch coverage is explained.
+Branch coverage and excluding coverage are not available in stable rust, so you need to switch to nightly for that.
+For this reason generating line coverage is explained firstly. 
+Then, generating coverage reports with branch coverage is explained.
+Lastly, excluding coverage for tests is explained.
 
 ##### Line coverage
 To run the tests in stable rust with coverage you can use the following command:
@@ -95,7 +97,16 @@ rustup default nightly                  # switch to nightly since the branch cov
 cargo llvm-cov nextest -E 'not (test(/integration/))' --branch --open 
 ```
 
+##### Exclude coverage for tests
+By default, the coverage report includes the coverage of the tests. This generally not desired since the tests are not part of the codebase.
+In nightly there is the `#[coverage(off)]` coverage attribute that can be used to exclude the tests from the coverage report. It does not completely work with `#[tokio::test]` tests to my knowledge but it is still useful.
+An `exlcude-coverage` feature is made in this project to exclude the tests from the coverage report. To use this feature you need to be in nightly and use the --features nightly-features flag:
+```
+rustup default nightly                  # switch to nightly since the excluding coverage is not available in stable
+cargo llvm-cov nextest -E 'not (test(/integration/))' --branch --open --features nightly-features
+```
 
+##### Manual tests
 For the manual tests you can first start the controller and the docker engine and then run the following command:
 ```
 cargo llvm-cov run --branch --open

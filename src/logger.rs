@@ -53,6 +53,7 @@ mod integration_tests_logger {
     }
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     fn test_create_log() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string() + "_1";
@@ -72,6 +73,7 @@ mod integration_tests_logger {
     }
 
     #[test]
+    #[cfg_attr(all(feature = "exclude-coverage", test), coverage(off))]
     fn test_log_macro() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string() + "_2";
