@@ -510,8 +510,9 @@ mod integration_tests_docker {
                 .await
                 .unwrap()
                 .len(),
-            0
-        , "Docker containers were not removed correctly");
+            0,
+            "Docker containers were not removed correctly"
+        );
     }
 
     // Tests the generate_validator_configs function; assert that the config files are correctly created
@@ -543,25 +544,59 @@ mod integration_tests_docker {
 
         // check if the files for the first validator are created
         let dir1 = "./network/validators/validator_0/config/";
-        assert!(fs::metadata(format!("{}{}", &dir1, "ledger.json")).is_ok(), "File not found, path: {}{}", &dir1, "ledger.json");
-        assert!(fs::metadata(format!("{}{}", &dir1, "rippled.cfg")).is_ok(), "File not found, path: {}{}", &dir1, "rippled.cfg");
+        assert!(
+            fs::metadata(format!("{}{}", &dir1, "ledger.json")).is_ok(),
+            "File not found, path: {}{}",
+            &dir1,
+            "ledger.json"
+        );
+        assert!(
+            fs::metadata(format!("{}{}", &dir1, "rippled.cfg")).is_ok(),
+            "File not found, path: {}{}",
+            &dir1,
+            "rippled.cfg"
+        );
         let validators_txt_file_path1 = format!("{}{}", &dir1, "validators.txt");
-        assert!(fs::metadata(&validators_txt_file_path1).is_ok(), "File not found, path: {}", &validators_txt_file_path1);
+        assert!(
+            fs::metadata(&validators_txt_file_path1).is_ok(),
+            "File not found, path: {}",
+            &validators_txt_file_path1
+        );
         let mut file = fs::File::open(&validators_txt_file_path1).unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
-        assert_eq!(contents, "[validators]\npub_key2",  "Contents were not generated correctly");
+        assert_eq!(
+            contents, "[validators]\npub_key2",
+            "Contents were not generated correctly"
+        );
 
         // check if the files for the second validator are created
         let dir2 = "./network/validators/validator_1/config/";
-        assert!(fs::metadata(format!("{}{}", &dir2, "ledger.json")).is_ok(), "File not found, path: {}{}", &dir2, "ledger.json");
-        assert!(fs::metadata(format!("{}{}", &dir2, "rippled.cfg")).is_ok(), "File not found, path: {}{}", &dir2, "rippled.cfg");
+        assert!(
+            fs::metadata(format!("{}{}", &dir2, "ledger.json")).is_ok(),
+            "File not found, path: {}{}",
+            &dir2,
+            "ledger.json"
+        );
+        assert!(
+            fs::metadata(format!("{}{}", &dir2, "rippled.cfg")).is_ok(),
+            "File not found, path: {}{}",
+            &dir2,
+            "rippled.cfg"
+        );
         let validators_txt_file_path2 = format!("{}{}", &dir2, "validators.txt");
-        assert!(fs::metadata(&validators_txt_file_path2).is_ok(), "File not found, path: {}", &validators_txt_file_path2);
+        assert!(
+            fs::metadata(&validators_txt_file_path2).is_ok(),
+            "File not found, path: {}",
+            &validators_txt_file_path2
+        );
         let mut file = fs::File::open(&validators_txt_file_path2).unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
-        assert_eq!(contents, "[validators]\npub_key1", "Contents were not generated correctly");
+        assert_eq!(
+            contents, "[validators]\npub_key1",
+            "Contents were not generated correctly"
+        );
     }
 
     // Note: This test requires running a docker engine in clean state and the controller to be running
@@ -585,14 +620,22 @@ mod integration_tests_docker {
             error => panic!("Error creating client: {:?}", error),
         };
         docker_network.initialize_network(client).await;
-        assert_eq!(docker_network.containers.len(), 3, "Not all containers were started");
+        assert_eq!(
+            docker_network.containers.len(),
+            3,
+            "Not all containers were started"
+        );
 
         let running_containers = docker_network
             .docker
             .list_containers::<String>(None)
             .await
             .unwrap();
-        assert_eq!(running_containers.len(), 3, "Not all containers were started");
+        assert_eq!(
+            running_containers.len(),
+            3,
+            "Not all containers were started"
+        );
 
         let re = regex::Regex::new(r"^/validator_\d+$").unwrap();
         for container in running_containers {
@@ -615,7 +658,8 @@ mod integration_tests_docker {
                 .await
                 .unwrap()
                 .len(),
-            0
-        , "Docker containers were not stopped correctly");
+            0,
+            "Docker containers were not stopped correctly"
+        );
     }
 }

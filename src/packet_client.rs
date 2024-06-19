@@ -104,7 +104,11 @@ mod integration_tests_grpc {
         let result = client.send_packet(packet_data, 60000, 60001).await;
 
         // Assert that the result is Ok
-        assert!(result.is_ok(), "assertion failed, expected: result.is_ok(), but got: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "assertion failed, expected: result.is_ok(), but got: {:?}",
+            result
+        );
     }
     #[tokio::test]
     async fn send_packet_empty_bytes() {
@@ -166,7 +170,11 @@ mod integration_tests_grpc {
         let result = client
             .send_validator_node_info(validator_node_info_list)
             .await;
-        assert!(result.is_ok(), "assertion failed, expected: result.is_ok(), but got: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "assertion failed, expected: result.is_ok(), but got: {:?}",
+            result
+        );
         assert_eq!(result.unwrap(), "Received validator node info".to_string());
     }
 
@@ -185,7 +193,11 @@ mod integration_tests_grpc {
         };
         let mut client = setup().await;
         let result = client.get_config().await;
-        assert!(result.is_ok(), "assertion failed, expected: result.is_ok(), but got: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "assertion failed, expected: result.is_ok(), but got: {:?}",
+            result
+        );
         assert_eq!(result.unwrap(), config);
     }
 }

@@ -63,7 +63,11 @@ mod integration_tests_logger {
         let logs_dir = format!("./logs/{}", timestamp);
         let file_path = format!("{}/{}.{}", logs_dir, filename, file_type);
 
-        assert!(fs::metadata(file_path).is_ok(), "File was not created or not on the right path: {}", file_path);
+        assert!(
+            fs::metadata(&file_path).is_ok(),
+            "File was not created or not on the right path: {}",
+            &file_path
+        );
         cleanup_log_file(&logs_dir);
     }
 
@@ -81,12 +85,19 @@ mod integration_tests_logger {
         let logs_dir = format!("./logs/{}", timestamp);
         let file_path = format!("{}/{}.{}", logs_dir, filename, file_type);
 
-        let mut file = fs::File::open(file_path).unwrap();
+        let mut file = fs::File::open(&file_path).unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
 
-        assert!(fs::metadata(file_path).is_ok(), "File was not created or not on the right path: {}", file_path);
-        assert!(contents.contains(message), "Message was not logged correctly");
+        assert!(
+            fs::metadata(&file_path).is_ok(),
+            "File was not created or not on the right path: {}",
+            &file_path
+        );
+        assert!(
+            contents.contains(message),
+            "Message was not logged correctly"
+        );
         cleanup_log_file(&logs_dir);
     }
 }
