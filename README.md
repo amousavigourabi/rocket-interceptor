@@ -99,11 +99,11 @@ rustup install nightly   # This is only needed the first time
 cargo +nightly llvm-cov nextest -E 'not (test(/integration/))' --branch --open 
 ```
 
-##### Exclude coverage for tests
+##### Exclude test code from coverage
 By default, the coverage report includes the coverage of the tests. This generally not desired since the tests are not part of the codebase.
-In nightly there is the `// #[coverage(off)]` coverage attribute that can be used to exclude the tests from the coverage report. It does not completely work with `#[tokio::test]` tests to my knowledge, but it is still useful.
-So to run the tests without the coverage of the tests you need to use nightly and put `#![feature(coverage_attribute)]` at top of `main.rs`. And put `// #[coverage(off)]` above the tests you want to exclude from the coverage report.
-For convenience these are already added as comments where necessary in the codebase. You can uncomment all of these and run the tests as normal. For RustRover you can replace all the `// // #[coverage(off)]` comments with `// #[coverage(off)]` in one go with ctrl+shift+R.
+In nightly there is the `#[coverage(off)]` coverage attribute that can be used to exclude the tests from the coverage report. It does not completely work with `#[tokio::test]` tests to my knowledge, but it is still useful.
+So to run the tests without the coverage of the tests you need to use nightly and put `#![feature(coverage_attribute)]` at top of `main.rs`. And put `#[coverage(off)]` above the tests (or other functions) you want to exclude from the coverage report.
+For convenience these are already added as comments where necessary in the codebase. You can uncomment all of these and run the tests as normal. For RustRover you can replace all the `// #[coverage(off)]` comments with `#[coverage(off)]` in one go with ctrl+shift+R. Use the file mask `*.rs` to avoid replacing it in this README :).
 
 ##### Manual tests
 For the manual tests you can first start the controller and the docker engine and then run the following command:
