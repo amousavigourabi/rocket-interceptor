@@ -228,7 +228,7 @@ mod unit_tests {
     use rand::Rng;
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_message_new() {
         let data = vec![1, 2, 3, 4, 5];
         let peer_to_port = 8080;
@@ -239,7 +239,7 @@ mod unit_tests {
     }
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_node_new() {
         let port = 8080;
         let node = Node::new(port);
@@ -276,7 +276,7 @@ mod unit_tests {
     }
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Received compressed message: bytes[0] = 128")]
     fn panic_compressed_message() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
@@ -289,7 +289,7 @@ mod unit_tests {
     }
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Unknown version header: bytes[0] = 40")]
     fn panic_unknown_version_header() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
@@ -302,7 +302,7 @@ mod unit_tests {
     }
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn pass_check_message_1() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
         let payload_size: usize = 444;
@@ -316,7 +316,7 @@ mod unit_tests {
     }
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn pass_check_message_2() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
         let payload_size: usize = 4444;

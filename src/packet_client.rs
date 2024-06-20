@@ -97,7 +97,7 @@ mod integration_tests_grpc {
     }
 
     #[tokio::test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn send_packet_ok() {
         let mut client = setup().await;
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -113,7 +113,7 @@ mod integration_tests_grpc {
         );
     }
     #[tokio::test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn send_packet_empty_bytes() {
         let mut client = setup().await;
         // Prepare a request with invalid data
@@ -127,7 +127,7 @@ mod integration_tests_grpc {
     }
 
     #[tokio::test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn send_packet_max_from_port() {
         let mut client = setup().await;
         // Prepare a request with invalid data
@@ -142,7 +142,7 @@ mod integration_tests_grpc {
     }
 
     #[tokio::test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn send_packet_max_to_port() {
         let mut client = setup().await;
         // Prepare a request with invalid data
@@ -157,7 +157,7 @@ mod integration_tests_grpc {
     }
 
     #[tokio::test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn validator_node_info_ok() {
         let mut client = setup().await;
         let validator_node_info_list = vec![ValidatorNodeInfo {
@@ -185,7 +185,7 @@ mod integration_tests_grpc {
     }
 
     #[tokio::test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn get_config_ok() {
         let partition = Partition {
             nodes: vec![0, 1, 2],

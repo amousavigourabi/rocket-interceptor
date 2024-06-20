@@ -53,7 +53,7 @@ mod integration_tests_logger {
     }
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_create_log() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string() + "_1";
@@ -73,7 +73,7 @@ mod integration_tests_logger {
     }
 
     #[test]
-    // #[coverage(off)]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_log_macro() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string() + "_2";

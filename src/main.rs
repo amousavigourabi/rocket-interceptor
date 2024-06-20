@@ -1,4 +1,4 @@
-// #![feature(coverage_attribute)]
+// #![feature(coverage_attribute)]  // This feature is required to use the #[coverage(off)] attribute, only available in nightly builds
 mod connection_handler;
 mod docker_manager;
 mod logger;

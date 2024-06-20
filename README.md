@@ -89,7 +89,8 @@ To run the tests in stable rust with coverage you can use the following command:
 ```
 cargo llvm-cov nextest -E 'not (test(/integration/))' --open 
 ```
-Notice: it is the same as running the tests without coverage, but with the `llvm-cov nextest` command instead of `nextest run`. Refer to the section above for more information on running the tests.
+Notice: it is the same as running the tests without coverage, but with the `llvm-cov nextest` command instead of `nextest run`. Refer to the section above for more information on running the tests (filter options and prerequisites).
+The --open flag will open the coverage report in your browser immediately after it is done for convenience. You can remove this flag if you do not want this behavior. The coverage report will be saved in the `target/llvm-cov/html` directory.
 
 ##### Branch coverage
 To make a coverage report with branch coverage you can run the following:
