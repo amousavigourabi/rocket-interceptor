@@ -86,27 +86,35 @@ impl PacketClient {
     }
 }
 
-//Test work but need the python server to be running, skipped for now
+// Note: these tests require the controller to be running
 #[cfg(test)]
-mod integration_tests {
+mod integration_tests_grpc {
     use super::*;
+    use crate::packet_client::proto::Partition;
+
     async fn setup() -> PacketClient {
         PacketClient::new().await.unwrap()
     }
 
     #[tokio::test]
-    async fn assert_result() {
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn send_packet_ok() {
         let mut client = setup().await;
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
         // Call the async function and obtain the result
-        let result = client.send_packet(packet_data, 2, 3).await;
+        let result = client.send_packet(packet_data, 60000, 60001).await;
 
         // Assert that the result is Ok
-        assert!(result.is_ok());
+        assert!(
+            result.is_ok(),
+            "assertion failed, expected: result.is_ok(), but got: {:?}",
+            result
+        );
     }
     #[tokio::test]
-    async fn assert_empty_bytes() {
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn send_packet_empty_bytes() {
         let mut client = setup().await;
         // Prepare a request with invalid data
         let packet_data: Vec<u8> = vec![]; // Empty data
@@ -119,7 +127,8 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn assert_empty_port() {
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn send_packet_max_from_port() {
         let mut client = setup().await;
         // Prepare a request with invalid data
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Empty data
@@ -130,5 +139,72 @@ mod integration_tests {
 
         // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn send_packet_max_to_port() {
+        let mut client = setup().await;
+        // Prepare a request with invalid data
+        let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Empty data
+        let packet_to_port: u32 = u32::MAX;
+
+        // Call the async function and obtain the result
+        let result = client.send_packet(packet_data, 2, packet_to_port).await;
+
+        // Assert that the result is not Ok (i.e., Err)
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn validator_node_info_ok() {
+        let mut client = setup().await;
+        let validator_node_info_list = vec![ValidatorNodeInfo {
+            peer_port: 60000,
+            ws_public_port: 61000,
+            ws_admin_port: 62000,
+            rpc_port: 63000,
+            status: "active".to_string(),
+            validation_key: "READ SOIL DASH FUND ISLE LEN SOD OUT MACE ERIC DRAG MILT".to_string(),
+            validation_private_key: "paAgnNZ9NaKTACGT3dGBV2eNHRxXNo8hRhNQNEWRJ23m5isp93t"
+                .to_string(),
+            validation_public_key: "n9KjTKEaHJ12Kuon5PDZ7fQAo5ExZ6cKH4h3L8q6m9YhoYqeBDho"
+                .to_string(),
+            validation_seed: "shM8uxbqE5g43G3VwKt6TM2pLvFan".to_string(),
+        }];
+        let result = client
+            .send_validator_node_info(validator_node_info_list)
+            .await;
+        assert!(
+            result.is_ok(),
+            "assertion failed, expected: result.is_ok(), but got: {:?}",
+            result
+        );
+        assert_eq!(result.unwrap(), "Received validator node info".to_string());
+    }
+
+    #[tokio::test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn get_config_ok() {
+        let partition = Partition {
+            nodes: vec![0, 1, 2],
+        };
+        let config = Config {
+            base_port_peer: 60000,
+            base_port_ws: 61000,
+            base_port_ws_admin: 62000,
+            base_port_rpc: 63000,
+            number_of_nodes: 3,
+            partitions: vec![partition],
+        };
+        let mut client = setup().await;
+        let result = client.get_config().await;
+        assert!(
+            result.is_ok(),
+            "assertion failed, expected: result.is_ok(), but got: {:?}",
+            result
+        );
+        assert_eq!(result.unwrap(), config);
     }
 }

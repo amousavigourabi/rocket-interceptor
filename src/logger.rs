@@ -43,7 +43,7 @@ pub fn log(file: &Mutex<std::fs::File>, message: &str) {
 }
 
 #[cfg(test)]
-mod tests {
+mod integration_tests_logger {
     use super::*;
     use std::fs;
     use std::io::Read;
@@ -53,6 +53,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_create_log() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string() + "_1";
@@ -63,11 +64,16 @@ mod tests {
         let logs_dir = format!("./logs/{}", timestamp);
         let file_path = format!("{}/{}.{}", logs_dir, filename, file_type);
 
-        assert!(fs::metadata(file_path).is_ok());
+        assert!(
+            fs::metadata(&file_path).is_ok(),
+            "File was not created or not on the right path: {}",
+            &file_path
+        );
         cleanup_log_file(&logs_dir);
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_log_macro() {
         let now = Local::now();
         let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string() + "_2";
@@ -81,11 +87,19 @@ mod tests {
         let logs_dir = format!("./logs/{}", timestamp);
         let file_path = format!("{}/{}.{}", logs_dir, filename, file_type);
 
-        let mut file = fs::File::open(file_path).unwrap();
+        let mut file = fs::File::open(&file_path).unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
 
-        assert!(contents.contains(message));
+        assert!(
+            fs::metadata(&file_path).is_ok(),
+            "File was not created or not on the right path: {}",
+            &file_path
+        );
+        assert!(
+            contents.contains(message),
+            "Message was not logged correctly"
+        );
         cleanup_log_file(&logs_dir);
     }
 }

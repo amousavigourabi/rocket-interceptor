@@ -222,10 +222,31 @@ impl Node {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::connection_handler::{Node, SIZE_64KB, SIZE_64MB};
+mod unit_tests {
+    use crate::connection_handler::{Message, Node, SIZE_64KB, SIZE_64MB};
     use bytes::BytesMut;
     use rand::Rng;
+
+    #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    fn test_message_new() {
+        let data = vec![1, 2, 3, 4, 5];
+        let peer_to_port = 8080;
+        let message = Message::new(data.clone(), peer_to_port);
+
+        assert_eq!(message.data, data);
+        assert_eq!(message.peer_to_port, peer_to_port);
+    }
+
+    #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    fn test_node_new() {
+        let port = 8080;
+        let node = Node::new(port);
+
+        assert_eq!(node.port, port);
+        assert_eq!(node.peers.len(), 0);
+    }
 
     fn create_dummy_payload(len: usize) -> Vec<u8> {
         let mut payload = Vec::new();
@@ -255,6 +276,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Received compressed message: bytes[0] = 128")]
     fn panic_compressed_message() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
@@ -267,6 +289,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Unknown version header: bytes[0] = 40")]
     fn panic_unknown_version_header() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
@@ -279,6 +302,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn pass_check_message_1() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
         let payload_size: usize = 444;
@@ -292,6 +316,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn pass_check_message_2() {
         let mut buf = BytesMut::with_capacity(SIZE_64KB);
         let payload_size: usize = 4444;

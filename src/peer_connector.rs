@@ -155,11 +155,19 @@ impl PeerConnector {
 }
 
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use crate::peer_connector::PeerConnector;
     use bytes::BytesMut;
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    fn peer_connector_new_test() {
+        let peer_connector = PeerConnector::new("127.0.0.1".to_string());
+        assert_eq!(peer_connector.ip_addr, "127.0.0.1".to_string());
+    }
+
+    #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn upgrade_request_test() {
         let expected = String::from(
             "\
@@ -178,6 +186,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn check_upgrade_request_response_no_panic() {
         let response = b"\
             HTTP/1.1 101 Switching Protocol\r\n
@@ -201,6 +210,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Response parse failed.")]
     fn check_upgrade_request_response_invalid_request() {
         let mut buf = BytesMut::new();
@@ -209,6 +219,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Could not separate HTTP headers from body. Response is invalid.")]
     fn check_upgrade_request_response_invalid_response() {
         let mut buf = BytesMut::new();
@@ -218,6 +229,7 @@ mod tests {
     }
 
     #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(
         expected = "Response status code expected to be 101 but was: 404\nBody of the response: <body message>"
     )]
