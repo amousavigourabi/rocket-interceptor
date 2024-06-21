@@ -64,7 +64,8 @@ cargo nextest run -E 'not (test(/grpc|docker/))'
 This will run all the tests except the integration tests that depend on grpc and docker.
 You can use nextest [filter options](https://nexte.st/docs/filtersets/) to filter out the tests you do not want to run, it is basically a regex that matches the test module names.
 
-To run the grpc tests in `packet_client.rs` you need to have the controller running with `keep_action_log=False` and `iteration_type=NoneIteration(timeout_seconds=300)`.
+To run the grpc tests in `packet_client.rs` you need to have the controller running with `keep_action_log=False`, you can configure this in the `__init__()` of a strategy by adding `keep_action_log=False,` to the `super().__init__()`. 
+You also need to configure your controller with `iteration_type=NoneIteration(timeout_seconds=300)`, this can be passed as an argument to the strategy.
 To run the `test_initialize_network` test in `docker_manager.rs` you need to have a docker engine running on your machine in addition to the controller with the `NoneIteration` as IterationType.
 If you want to run multiple integration tests that use shared resources (grpc client and docker engine), you need to run them sequentially. You can do this by adding the `--test-threads=1` flag to the command.
 So in short, to run all the tests you can run the following command with the controller and docker engine running on your machine:
@@ -76,7 +77,8 @@ cargo nextest run --test-threads=1
 #### Generating testing reports
 `llvm-cov` is used to generate coverage reports:
 ```
-cargo install cargo-llvm-cov --locked   # This is only needed the first time
+cargo install cargo-llvm-cov --locked       # This is only needed the first time
+rustup component add llvm-tools-preview     # This is also only needed the first time
 ```
 Branch coverage and excluding coverage are not available in stable rust, so you need to switch to nightly for that.
 For this reason generating line coverage is explained firstly. 
