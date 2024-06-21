@@ -49,10 +49,17 @@ python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. protos/packet
 - For the interceptor you can just rebuild.
 
 ### Logging
-For terminal logging we use env_logger. You can set the log level by setting the `RUST_LOG` environment variable. The levels are `trace`, `debug`, `info`, `warn`, `error`.
-
-For file logging we created a custom logger. You can create a file with a file type you specify with `create_log`. It will be kept under the `logs/[start_time]/` directory. 
-Initialize it in the lazy_static block. Then you can log to the file by calling the `log!` macro, which needs the file and string to log.
+For terminal logging we use env_logger. You can configure the log level by setting the `RUST_LOG` environment variable before running. The levels are `trace`, `debug`, `info`, `warn`, `error`.
+For example to set the log level to info you can execute the following command:
+```Linux
+export RUST_LOG=xrpl_packet_interceptor=info    # Linux
+```
+```Windows Command Prompt
+set RUST_LOG=xrpl_packet_interceptor=info       # Windows Command Prompt
+```
+```Windows PowerShell
+$env:RUST_LOG = "xrpl_packet_interceptor=info"  # Windows PowerShell
+```
 
 ### Testing
 
