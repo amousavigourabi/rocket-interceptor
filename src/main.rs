@@ -32,7 +32,6 @@ async fn main() -> io::Result<()> {
     })
     .expect("Unable to set Ctrl+C handler");
 
-    env::set_var("RUST_LOG", "xrpl_packet_interceptor=info");
     env_logger::init();
 
     let client = match packet_client::PacketClient::new().await {
