@@ -1,6 +1,8 @@
 @echo off
 
 cargo "clean"
-DEL  "xrpl-packet-interceptor"
+IF EXIST "xrpl-packet-interceptor.exe" (
+    DEL  "xrpl-packet-interceptor.exe"
+)
 cargo "build" "--release"
-COPY  "%CD%\target\release\xrpl-packet-interceptor" "."
+COPY  "%CD%\target\release\xrpl-packet-interceptor.exe" "."
