@@ -1,3 +1,5 @@
+//! This module is responsible for setting up connections between peers.
+
 use bytes::{Buf, BytesMut};
 use log::{debug, error};
 use openssl::ssl::{Ssl, SslContext, SslMethod};
@@ -8,41 +10,64 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_openssl::SslStream;
 
+/// Struct that represents the object that connects peers with each other.
 #[derive(Clone)]
 pub struct PeerConnector {
+    /// The IP address of every peer. Only the ports of the peers differ.
     pub ip_addr: String,
 }
 
 impl PeerConnector {
+    /// Initializes a new PeerConnector.
+    ///
+    /// # Parameters
+    /// * 'ip_addr' - the IP address of all peers.
     pub fn new(ip_addr: String) -> Self {
         Self { ip_addr }
     }
 
+    /// Connects two peers with each other. Returns both halves of the connection, so the interceptor is in between.
+    ///
+    /// # Parameters
+    /// * 'port_peer_1' - the port of the first peer.
+    /// * 'port_peer_2' - the port of the second peer.
+    /// * 'pub_key_peer_1' - the public key of the first peer.
+    /// * 'pub_key_peer_2' - the public key of the second peer.
     pub async fn connect_peers(
         &self,
-        peer1_port: u16,
-        peer2_port: u16,
-        pub_key1: &str,
-        pub_key2: &str,
+        port_peer_1: u16,
+        port_peer_2: u16,
+        pub_key_peer_1: &str,
+        pub_key_peer_2: &str,
     ) -> (SslStream<TcpStream>, SslStream<TcpStream>) {
-        let ssl_stream_1 =
-            Self::setup_connection_half(self.ip_addr.as_str(), peer1_port, pub_key2).await;
-        let ssl_stream_2 =
-            Self::setup_connection_half(self.ip_addr.as_str(), peer2_port, pub_key1).await;
-        (ssl_stream_1, ssl_stream_2)
+        let connection_half_1 =
+            Self::setup_connection_half(self.ip_addr.as_str(), port_peer_1, pub_key_peer_2).await;
+        let connection_half_2 =
+            Self::setup_connection_half(self.ip_addr.as_str(), port_peer_2, pub_key_peer_1).await;
+        (connection_half_1, connection_half_2)
     }
 
     /// Sets up a connection half from a peer to another peer.
     /// Connects to the peer at ip:port.
     /// We pretend to be the other peer with its public key.
-    /// This way we can intercept the connection
+    /// This way we can intercept the connection.
+    ///
+    /// # Parameters
+    /// * 'ip' - the ip to which we connect to.
+    /// * 'port' - the port to which we connect to.
+    /// * 'pub_key_of_peer_we_pretend_to_be' - the public key of the peer we pretend to be.
+    ///
+    /// # Panics
+    /// * If an error occurred while creating and connecting the SslStream.
+    /// * If an error occurred while reading or writing to/from the SslStream.
+    /// * If the response of the upgrade request is invalid.
     async fn setup_connection_half(
         ip: &str,
         port: u16,
-        pub_key_peer_we_pretend_to_be: &str,
+        pub_key_of_peer_we_pretend_to_be: &str,
     ) -> SslStream<TcpStream> {
         let mut ssl_stream = Self::create_and_connect_ssl_stream(ip, port).await;
-        let content = Self::format_upgrade_request_content(pub_key_peer_we_pretend_to_be);
+        let content = Self::format_upgrade_request_content(pub_key_of_peer_we_pretend_to_be);
         ssl_stream
             .write_all(content.as_bytes())
             .await
@@ -70,13 +95,16 @@ impl PeerConnector {
     /// This method checks given a buffered HTTP response, whether it is a valid 101 switching protocol response.
     ///
     /// # Panics
-    ///  This method panics if the request is not valid.
+    /// * If it could not parse the response.
+    /// * If it received a partial message.
+    /// * If it could not separate the HTTP headers from the body.
+    /// * If the response code is not '101' as expected to be.
     fn check_upgrade_request_response(mut buffered_response: BytesMut) {
         if let Some(n) = buffered_response.windows(4).position(|x| x == b"\r\n\r\n") {
             let mut headers = [httparse::EMPTY_HEADER; 32];
-            let mut resp = httparse::Response::new(&mut headers);
+            let mut response = httparse::Response::new(&mut headers);
 
-            let status = resp
+            let status = response
                 .parse(&buffered_response[0..n + 4])
                 .expect("Response parse failed.");
 
@@ -84,13 +112,13 @@ impl PeerConnector {
                 panic!("Did not fully parse the response.");
             }
 
-            let response_code = resp.code.unwrap();
+            let response_status_code = response.code.unwrap();
 
             debug!(
                 "Peer Handshake Response: version {}, status {}, reason {}",
-                resp.version.unwrap(),
-                &response_code,
-                resp.reason.unwrap()
+                response.version.unwrap(),
+                &response_status_code,
+                response.reason.unwrap()
             );
 
             debug!("Printing response headers:");
@@ -101,11 +129,11 @@ impl PeerConnector {
             buffered_response.advance(n + 4);
 
             // HTTP code 101: Switching Protocols
-            if response_code != 101 {
+            if response_status_code != 101 {
                 panic!(
                     "Response status code expected to be 101 but was: {}\n\
                     Body of the response: {}",
-                    response_code,
+                    response_status_code,
                     String::from_utf8_lossy(&buffered_response).trim()
                 );
             }
@@ -121,14 +149,23 @@ impl PeerConnector {
         }
     }
 
+    /// Creates a SslStream and connects to the specified IP address + port.
+    ///
+    /// # Parameters
+    /// * 'ip' - the IP address to which a connection should be made.
+    /// * 'port' - the port to which a connection should be made.
+    ///
+    /// # Panics
+    /// * If the ip:port specified is invalid.
+    /// * If the SslStream could not be created or connected to.
     async fn create_and_connect_ssl_stream(ip: &str, port: u16) -> SslStream<TcpStream> {
         let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
         let tcp_stream = TcpStream::connect(socket_address).await.unwrap();
 
         tcp_stream.set_nodelay(true).expect("Set nodelay failed");
-        let ssl_ctx = SslContext::builder(SslMethod::tls()).unwrap().build();
-        let ssl = Ssl::new(&ssl_ctx).unwrap();
-        let mut ssl_stream = SslStream::<TcpStream>::new(ssl, tcp_stream).unwrap();
+        let ssl_context = SslContext::builder(SslMethod::tls()).unwrap().build();
+        let ssl_session = Ssl::new(&ssl_context).unwrap();
+        let mut ssl_stream = SslStream::<TcpStream>::new(ssl_session, tcp_stream).unwrap();
         SslStream::connect(Pin::new(&mut ssl_stream))
             .await
             .expect("SSL connection failed");
@@ -139,6 +176,9 @@ impl PeerConnector {
     /// Creates a request message which wil upgrade the connection between peer and interceptor
     /// The content is trivial. The Session-Signature gets neglected (dummy value 'a')
     /// since we removed the handshake verification check in the rippled source code.
+    ///
+    /// # Parameters
+    /// * 'pub_key_peer_to' - the public key to be filled in into the request.
     fn format_upgrade_request_content(pub_key_peer_to: &str) -> String {
         format!(
             "\
@@ -204,28 +244,28 @@ mod unit_tests {
             Previous-Ledger: 0000000000000000000000000000000000000000000000000000000000000000\r\n\r\n
         ";
 
-        let mut buf = BytesMut::new();
-        buf.extend_from_slice(response);
-        PeerConnector::check_upgrade_request_response(buf);
+        let mut buffer = BytesMut::new();
+        buffer.extend_from_slice(response);
+        PeerConnector::check_upgrade_request_response(buffer);
     }
 
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Response parse failed.")]
     fn check_upgrade_request_response_invalid_request() {
-        let mut buf = BytesMut::new();
-        buf.extend_from_slice(b"garbage\r\n\r\n");
-        PeerConnector::check_upgrade_request_response(buf);
+        let mut buffer = BytesMut::new();
+        buffer.extend_from_slice(b"garbage\r\n\r\n");
+        PeerConnector::check_upgrade_request_response(buffer);
     }
 
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     #[should_panic(expected = "Could not separate HTTP headers from body. Response is invalid.")]
     fn check_upgrade_request_response_invalid_response() {
-        let mut buf = BytesMut::new();
+        let mut buffer = BytesMut::new();
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        buf.extend_from_slice(&data);
-        PeerConnector::check_upgrade_request_response(buf);
+        buffer.extend_from_slice(&data);
+        PeerConnector::check_upgrade_request_response(buffer);
     }
 
     #[test]

@@ -1,3 +1,5 @@
+//! This module is responsible for making and handling requests to the controller.
+
 use crate::packet_client::proto::{Config, GetConfig, PacketAck};
 use log::{debug, info};
 use proto::packet_service_client::PacketServiceClient;
@@ -7,17 +9,25 @@ pub mod proto {
     tonic::include_proto!("packet");
 }
 
+/// Struct that represents the object that is able to call the controller module.
 #[derive(Debug)]
 pub struct PacketClient {
     pub client: PacketServiceClient<tonic::transport::Channel>,
 }
 
 impl PacketClient {
+    /// Initializes a new PacketClient that connects to the controller.
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let client = PacketServiceClient::connect("http://[::1]:50051").await?;
         Ok(Self { client })
     }
 
+    /// Sends an intercepted message to the controller, asking for an action.
+    ///
+    /// # Parameters
+    /// * 'packet_data' - the data of the intercepted message.
+    /// * 'packet_from_port' - the port of the node where the message came from.
+    /// * 'packet_to_port' - the port of the node where the message is sent to.
     pub async fn send_packet(
         &mut self,
         packet_data: Vec<u8>,
@@ -29,12 +39,12 @@ impl PacketClient {
         }
 
         match packet_from_port {
-            u32::MAX => return Err("Port not set properly".into()),
+            u32::MAX => return Err("packet_from_port not set properly".into()),
             port => port,
         };
 
         match packet_to_port {
-            u32::MAX => return Err("Port not set properly".into()),
+            u32::MAX => return Err("packet_to_port not set properly".into()),
             port => port,
         };
 
@@ -59,6 +69,10 @@ impl PacketClient {
         Ok(response)
     }
 
+    /// Sends the info of all ValidatorNodes to the controller.
+    ///
+    /// # Parameters
+    /// * 'validator_node_info_list' - A list of all the info of the ValidatorNodes.
     pub async fn send_validator_node_info(
         &mut self,
         validator_node_info_list: Vec<ValidatorNodeInfo>,
@@ -74,6 +88,7 @@ impl PacketClient {
         Ok(response.status)
     }
 
+    /// Sends a request to the controller asking for the network configuration.
     pub async fn get_config(&mut self) -> Result<Config, Box<dyn std::error::Error>> {
         let request = tonic::Request::new(GetConfig {});
         let response = self.client.get_config(request).await?.into_inner();
