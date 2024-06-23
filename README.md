@@ -5,6 +5,7 @@
 ### Prerequisites
 - [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 - Protocol Buffer Compiler (protoc). For installation instructions refer to [this](https://github.com/hyperium/tonic?tab=readme-ov-file#dependencies).
+- OpenSSL
 
 ### How to build
 
