@@ -12,7 +12,7 @@
 To install OpenSSL, see the official installation guide at https://github.com/openssl/openssl.
 Although this is the official guide, there are alternatives that may be easier for you. 
 Note that this worked on our machines, but we cannot guarantee that this works for every machine. 
-We recommend Windows users to use WSL as it is easier to install OpenSSL on it.  
+We recommend Windows users to use WSL with a Debian based distro as it is easier to install OpenSSL on it.  
 
 **Windows**
 Note that this is for a 64 bit machine running on an Intel chip with the x86_64 architecture. For other architectures this may be a bit different.
@@ -23,14 +23,13 @@ After installation, you should set two environment variables:
 
 **Linux**
 
-For Debian/Ubuntu, it is possible to use 'apt'.
+For Debian based distro's, it is possible to use 'apt'.
 
 ```console
 sudo apt install openssl
+sudo apt install libssl-dev
+sudo apt install pkg-config
 ```
-
-You may need to add something to your PATH variable or set an environment variable, but that depends on your system.
-If this is necessary it will probably prompt you to do so if run OpenSSL. 
 
 **MacOS**
 
