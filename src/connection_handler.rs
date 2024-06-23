@@ -54,7 +54,7 @@ impl Peer {
     /// Initializes a new Peer from a node's perspective.
     ///
     /// # Parameters
-    /// * 'port' - the port of the peer where the connection is established to. This is also its ID.
+    /// * 'port' - the port of the peer where the connection is established to. This uniquely identifies them.
     /// * 'write_half' - the half that the interceptor uses to write to that peer.
     /// * 'read_half' - the half that the node writes to if it wants to send a message to the peer.
     pub fn new(
@@ -73,7 +73,7 @@ impl Peer {
 /// Struct that represents a node in the network.
 #[derive(Debug)]
 pub struct Node {
-    /// The port of the peer where connections can be established to. This is also its ID.
+    /// The port of the peer where connections can be established to. The port uniquely identifies them.
     pub port: u16,
     /// The peers the node is connected to.
     pub peers: Vec<Peer>,
@@ -83,7 +83,7 @@ impl Node {
     /// Initializes a new Node.
     ///
     /// # Parameters
-    /// * 'port' - the port of the peer where connections can be established to. This is also its ID.
+    /// * 'port' - the port of the peer where connections can be established to. The port uniquely identifies.
     pub fn new(port: u16) -> Self {
         Self {
             port,
