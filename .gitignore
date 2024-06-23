@@ -1,3 +1,6 @@
+xrpl-packet-interceptor
+xrpl-packet-interceptor.exe
+
 network/validators/**/*
 logs/
 

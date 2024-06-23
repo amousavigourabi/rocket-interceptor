@@ -10,11 +10,17 @@
 
 ### Building the executable
 
+**Linux/macOS**
 ```console
-cargo build --release
+./build.sh
 ```
 
-The executable can be found in the folder `target/release`.
+**Windows**
+```console
+.\build.bat
+```
+
+After executing the build script, the executable file should now be available in the root of this repository.
 
 ## The Ripple daemon Docker image
 
