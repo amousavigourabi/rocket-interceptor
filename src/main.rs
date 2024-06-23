@@ -1,15 +1,15 @@
+// #![feature(coverage_attribute)]  // This feature is required to use the #[coverage(off)] attribute, only available in nightly builds
 mod connection_handler;
 mod docker_manager;
-mod logger;
 mod packet_client;
 mod peer_connector;
 use crate::connection_handler::{Node, Peer};
 use crate::docker_manager::DockerNetwork;
 use crate::packet_client::proto::Partition;
 use crate::peer_connector::PeerConnector;
+use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::{env, io};
 use tokio::sync::Mutex;
 
 /// Function that checks whether a connection between two peers should be established or not.
@@ -47,7 +47,6 @@ async fn main() -> io::Result<()> {
     })
     .expect("Unable to set Ctrl+C handler");
 
-    env::set_var("RUST_LOG", "xrpl_packet_interceptor=info");
     env_logger::init();
 
     let client = match packet_client::PacketClient::new().await {
@@ -123,6 +122,5 @@ async fn main() -> io::Result<()> {
     }
 
     network.stop_network().await;
-
     Ok(())
 }

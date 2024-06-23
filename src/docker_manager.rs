@@ -1,4 +1,5 @@
 //! This module is responsible for setting up and tearing down the Docker containers who run the validator nodes.
+
 use log::{debug, info};
 use std::env::current_dir;
 use std::fs;
@@ -31,7 +32,7 @@ struct ValidationKeyCreateResponse {
 }
 
 /// Struct that represents all the data used for validation by nodes.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ValidatorKeyData {
     /// The status of the request that was used to make this data.
     pub status: String,
@@ -212,7 +213,17 @@ impl DockerNetwork {
                         self.docker
                             .stop_container(container.id.clone().unwrap().as_str(), None)
                             .await
-                            .unwrap()
+                            .unwrap();
+
+                        // Poll until the container is no longer in the list of running containers
+                        loop {
+                            let containers =
+                                self.docker.list_containers::<String>(None).await.unwrap();
+                            if containers.iter().all(|c| c.id != container.id) {
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_millis(200)).await;
+                        }
                     }
                 }
             }
@@ -514,5 +525,207 @@ impl DockerNetwork {
             ret.push((container_name, key.clone()));
         }
         ret
+    }
+}
+
+#[cfg(test)]
+mod integration_tests_docker {
+    use super::*;
+    use crate::packet_client;
+    use crate::packet_client::proto::{Config, Partition};
+
+    fn docker_network_setup() -> DockerNetwork {
+        let partition = Partition {
+            nodes: vec![0, 1, 2],
+        };
+        let config = Config {
+            base_port_peer: 60000,
+            base_port_ws: 61000,
+            base_port_ws_admin: 62000,
+            base_port_rpc: 63000,
+            number_of_nodes: 3,
+            partitions: vec![partition],
+        };
+        DockerNetwork::new(config)
+    }
+
+    // Note: This test requires running a docker engine in clean state
+    // Tests the generate_keys function; assert that the keys are generated and the container is removed
+    #[tokio::test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn test_generate_keys() {
+        let docker_network = docker_network_setup();
+        assert_eq!(
+            docker_network
+                .docker
+                .list_containers::<String>(None)
+                .await
+                .unwrap()
+                .len(),
+            0,
+            "This test requires a clean docker starting state"
+        );
+        let keys = docker_network.generate_keys(3).await;
+        assert_eq!(keys.len(), 3);
+        assert_eq!(
+            docker_network
+                .docker
+                .list_containers::<String>(None)
+                .await
+                .unwrap()
+                .len(),
+            0,
+            "Docker containers were not removed correctly"
+        );
+    }
+
+    // Tests the generate_validator_configs function; assert that the config files are correctly created
+    #[test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    fn test_generate_validator_configs() {
+        let keys = vec![
+            ValidatorKeyData {
+                status: "success".to_string(),
+                validation_key: "val_key1".to_string(),
+                validation_private_key: "priv_key1".to_string(),
+                validation_public_key: "pub_key1".to_string(),
+                validation_seed: "seed1".to_string(),
+            },
+            ValidatorKeyData {
+                status: "success".to_string(),
+                validation_key: "val_key2".to_string(),
+                validation_private_key: "priv_key2".to_string(),
+                validation_public_key: "pub_key2".to_string(),
+                validation_seed: "seed2".to_string(),
+            },
+        ];
+        let docker_network = docker_network_setup();
+        let configs = docker_network.generate_validator_configs(&keys);
+        assert_eq!(configs.len(), 2);
+        assert_eq!(configs[0].0, "validator_0");
+        assert_eq!(configs[1].0, "validator_1");
+        assert_eq!(configs[0].1, keys[0]);
+        assert_eq!(configs[1].1, keys[1]);
+
+        // check if the files for the first validator are created
+        let dir1 = "./network/validators/validator_0/config/";
+        assert!(
+            fs::metadata(format!("{}{}", &dir1, "ledger.json")).is_ok(),
+            "File not found, path: {}{}",
+            &dir1,
+            "ledger.json"
+        );
+        assert!(
+            fs::metadata(format!("{}{}", &dir1, "rippled.cfg")).is_ok(),
+            "File not found, path: {}{}",
+            &dir1,
+            "rippled.cfg"
+        );
+        let validators_txt_file_path1 = format!("{}{}", &dir1, "validators.txt");
+        assert!(
+            fs::metadata(&validators_txt_file_path1).is_ok(),
+            "File not found, path: {}",
+            &validators_txt_file_path1
+        );
+        let mut file = fs::File::open(&validators_txt_file_path1).unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+        assert_eq!(
+            contents, "[validators]\npub_key2",
+            "Contents were not generated correctly"
+        );
+
+        // check if the files for the second validator are created
+        let dir2 = "./network/validators/validator_1/config/";
+        assert!(
+            fs::metadata(format!("{}{}", &dir2, "ledger.json")).is_ok(),
+            "File not found, path: {}{}",
+            &dir2,
+            "ledger.json"
+        );
+        assert!(
+            fs::metadata(format!("{}{}", &dir2, "rippled.cfg")).is_ok(),
+            "File not found, path: {}{}",
+            &dir2,
+            "rippled.cfg"
+        );
+        let validators_txt_file_path2 = format!("{}{}", &dir2, "validators.txt");
+        assert!(
+            fs::metadata(&validators_txt_file_path2).is_ok(),
+            "File not found, path: {}",
+            &validators_txt_file_path2
+        );
+        let mut file = fs::File::open(&validators_txt_file_path2).unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+        assert_eq!(
+            contents, "[validators]\npub_key1",
+            "Contents were not generated correctly"
+        );
+    }
+
+    // Note: This test requires running a docker engine in clean state and the controller to be running
+    // Tests the initialize_network function; assert that the network is correctly initialized with the correct amount of nodes and names.
+    // Also tests the stop_network function
+    #[tokio::test]
+    // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
+    async fn test_initialize_network() {
+        let mut docker_network = docker_network_setup();
+        assert_eq!(
+            docker_network
+                .docker
+                .list_containers::<String>(None)
+                .await
+                .unwrap()
+                .len(),
+            0,
+            "This test requires a clean docker starting state"
+        );
+        let client = match packet_client::PacketClient::new().await {
+            Ok(client) => Arc::new(Mutex::new(client)),
+            error => panic!("Error creating client: {:?}", error),
+        };
+        docker_network.initialize_network(client).await;
+        assert_eq!(
+            docker_network.containers.len(),
+            3,
+            "Not all containers were started"
+        );
+
+        let running_containers = docker_network
+            .docker
+            .list_containers::<String>(None)
+            .await
+            .unwrap();
+        assert_eq!(
+            running_containers.len(),
+            3,
+            "Not all containers were started"
+        );
+
+        let re = regex::Regex::new(r"^/validator_\d+$").unwrap();
+        for container in running_containers {
+            if let Some(names) = container.names {
+                for name in names {
+                    assert!(
+                        re.is_match(&name),
+                        "Container name does not match expected pattern: {}",
+                        name
+                    );
+                }
+            }
+        }
+
+        docker_network.stop_network().await;
+        assert_eq!(
+            docker_network
+                .docker
+                .list_containers::<String>(None)
+                .await
+                .unwrap()
+                .len(),
+            0,
+            "Docker containers were not stopped correctly"
+        );
     }
 }
