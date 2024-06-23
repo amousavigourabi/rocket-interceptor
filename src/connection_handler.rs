@@ -4,6 +4,7 @@ use crate::packet_client::PacketClient;
 use bytes::BytesMut;
 use log::error;
 use std::cmp::min;
+use std::collections::HashMap;
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
@@ -109,7 +110,7 @@ impl Node {
     ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (sender, receiver) = mpsc::channel::<Message>();
         let mut read_threads = Vec::new();
-        let mut peers = Vec::new();
+        let mut peer_to_write_half = HashMap::new();
 
         for peer in self.peers {
             let read_thread = tokio::spawn(Self::read_loop(
@@ -120,10 +121,10 @@ impl Node {
                 sender.clone(),
             ));
             read_threads.push(read_thread);
-            peers.push((peer.port, peer.write_half));
+            peer_to_write_half.insert(peer.port, peer.write_half);
         }
 
-        let write_thread = tokio::spawn(Self::write_loop(receiver, peers));
+        let write_thread = tokio::spawn(Self::write_loop(receiver, peer_to_write_half));
         (read_threads, write_thread)
     }
 
@@ -268,24 +269,20 @@ impl Node {
     ///
     /// # Parameters
     /// * 'message_queue_receiver' - the queue where it receives messages to be sent.
-    /// * 'peers' - a Vec with port/WriteHalf pairs. Essentially a map from peer ports to their WriteHalves
+    /// * 'peer_to_write_half' - a HashMap which maps a port to the corresponding WriteHalf.
     ///
     /// # Panics
     /// * If no messages will be ever sent to the queue, meaning all senders have been dropped.
-    /// * If the peer's port could not be found in the list of peers.
+    /// * If the peer's port could not be found in the map.
     /// * If an error occurred while sending the message to the other peer.
     async fn write_loop(
         message_queue_receiver: mpsc::Receiver<Message>,
-        mut peers: Vec<(u16, WriteHalf<SslStream<TcpStream>>)>,
+        mut peer_to_write_half: HashMap<u16, WriteHalf<SslStream<TcpStream>>>,
     ) {
         loop {
             let message = message_queue_receiver.recv().unwrap();
 
-            let write_half = &mut peers
-                .iter_mut()
-                .find(|peer| peer.0 == message.peer_to_port)
-                .unwrap()
-                .1;
+            let write_half = peer_to_write_half.get_mut(&message.peer_to_port).unwrap();
 
             write_half
                 .write_all(&message.data)
