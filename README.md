@@ -26,9 +26,7 @@ After installation, you should set two environment variables:
 For Debian based distro's, it is possible to use 'apt'.
 
 ```console
-sudo apt install openssl
-sudo apt install libssl-dev
-sudo apt install pkg-config
+sudo apt install openssl libssl-dev pkg-config
 ```
 
 **MacOS**
