@@ -1,3 +1,4 @@
+//! This module is responsible for setting up and tearing down the Docker containers who run the validator nodes.
 use log::{debug, info};
 use std::env::current_dir;
 use std::fs;
@@ -22,38 +23,64 @@ use tokio::sync::Mutex;
 
 const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
 
+/// Struct that represents a response of a 'ValidationKeyCreate' request.
 #[derive(Debug, Deserialize)]
 struct ValidationKeyCreateResponse {
+    /// The result of the request.
     result: ValidatorKeyData,
 }
 
+/// Struct that represents all the data used for validation by nodes.
 #[derive(Debug, Deserialize, Clone)]
 pub struct ValidatorKeyData {
+    /// The status of the request that was used to make this data.
     pub status: String,
+    /// The validation key of a node.
     pub validation_key: String,
+    /// The validation private key of a node.
     pub validation_private_key: String,
+    /// The validation public key of a node.
     pub validation_public_key: String,
+    /// The seed used to make this validation info.
     pub validation_seed: String,
 }
 
+/// Struct that represents a Docker container that runs a rippled instance.
 #[derive(Debug, Clone)]
 pub struct DockerContainer {
+    /// The id of the container.
     pub id: Option<String>,
+    /// The name of the container.
     pub name: String,
+    /// The port where the node listens for peer connections.
     pub port_peer: u32,
+    /// The port where the node listens for WebSocket connections.
     pub port_ws: u32,
+    /// The port where the node listens for WebSocket connections for admins.
     pub port_ws_admin: u32,
+    /// The port where the node listens for RPC requests.
     pub port_rpc: u32,
+    /// The data of the keys of this node.
     pub key_data: ValidatorKeyData,
 }
 
-/// Checks whether a certain `DockerContainer` is available by calling `server_info`
-/// and parsing the `success` value.
-async fn check_validator_available(c: DockerContainer, docker: Docker) -> bool {
+/// Checks whether a certain `DockerContainer` is available by calling `server_info` and parsing the `success` value.
+///
+/// # Parameters
+/// * 'container' - the container to be checked.
+/// * 'docker' - the Docker interface used for API requests.
+///
+/// # Panics
+/// * If the 'id' of the container could not be cloned.
+/// * If the creation of the 'server_info' command raised an error.
+/// * If the 'server_info' command ran inside the docker container raised an error.
+/// * If the output could not be parsed to JSON.
+/// * If the JSON could not be parsed to a serde_json object.
+async fn check_validator_available(container: DockerContainer, docker: Docker) -> bool {
     let exec = docker
         .clone()
         .create_exec(
-            c.id.clone().unwrap().as_ref(),
+            container.id.clone().unwrap().as_ref(),
             CreateExecOptions {
                 attach_stdout: Some(true),
                 cmd: Some(vec!["rippled", "server_info"]),
@@ -70,23 +97,31 @@ async fn check_validator_available(c: DockerContainer, docker: Docker) -> bool {
             let json_str = String::from_utf8(msg.as_ref().to_vec()).unwrap();
             let server_info_data: Value = serde_json::from_str(json_str.as_str()).unwrap();
             if server_info_data["result"]["status"] == "success" {
-                debug!("{} Available!", c.name.clone());
+                debug!("{} Available!", container.name.clone());
                 return true;
             }
-            debug!("{} not available yet...", c.name.clone());
+            debug!("{} not available yet...", container.name.clone());
         }
     }
     false
 }
 
+/// Struct that represents the whole network of Docker containers.
 #[derive(Debug)]
 pub struct DockerNetwork {
+    /// The network configuration as a proto object.
     pub config: proto::Config,
+    /// A Vec of all the individual Docker containers who run a rippled instance.
     pub containers: Vec<DockerContainer>,
+    /// A Docker object to access the Docker API.
     docker: Docker,
 }
 
 impl DockerNetwork {
+    /// Initializes a new DockerNetwork.
+    ///
+    /// # Parameters
+    /// * 'config' - the config to be used to set up the network.
     pub fn new(config: proto::Config) -> DockerNetwork {
         DockerNetwork {
             config,
@@ -98,6 +133,12 @@ impl DockerNetwork {
     /// Initializes the docker network by generating keys for each configured node, and starting
     /// them using `bollard`. The containers that were started successfully are appended to
     /// the `containers` field in the struct.
+    ///
+    /// # Parameters
+    /// * 'client' - a PacketClient to send the ValidatorNodeInfo to the controller.
+    ///
+    /// # Panics
+    /// * If an error occurred while sending the ValidatorNodeInfo to the controller.
     pub async fn initialize_network(&mut self, client: Arc<Mutex<PacketClient>>) {
         // Stop all running validator nodes before starting new network
         self.stop_network().await;
@@ -147,7 +188,11 @@ impl DockerNetwork {
     }
 
     /// Stops the docker network, by looping over all running containers (`docker ps`)
-    /// and stopping all containers that start with `validator_` or `key_generator`
+    /// and stopping all containers that start with `validator_` or `key_generator`.
+    ///
+    /// # Panics
+    /// * If it could not fetch the list of running containers from the Docker API.
+    /// * If it could not terminate any running container.
     pub async fn stop_network(&self) {
         let running_containers = self
             .docker
@@ -179,11 +224,11 @@ impl DockerNetwork {
     pub async fn wait_for_startup(&self) {
         let mut threads = vec![];
         let arc = self.docker.clone();
-        for c in self.containers.clone() {
+        for container in self.containers.clone() {
             let _docker = arc.clone();
             let t = tokio::spawn(async move {
                 loop {
-                    if check_validator_available(c.clone(), _docker.clone()).await {
+                    if check_validator_available(container.clone(), _docker.clone()).await {
                         break;
                     }
                     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -197,6 +242,10 @@ impl DockerNetwork {
         }
     }
 
+    /// Downloads the 'isvanloon/rippled-no-sig-check:latest' image from DockerHub.
+    ///
+    /// # Panics
+    /// * If an error occurred while downloading the image.
     async fn download_image(&mut self) {
         self.docker
             .create_image(
@@ -212,6 +261,16 @@ impl DockerNetwork {
             .unwrap();
     }
 
+    /// Starts a validator node.
+    /// It binds specific ports of the container to be able to communicate with the nodes.
+    /// Besides, it starts the validator node with a specified ledger to have all amendments already included.
+    ///
+    /// # Parameters
+    /// * 'container' - the container to be started.
+    ///
+    /// # Panics
+    /// * If it could not format the directory path to the 'config' directory.
+    /// * If the Docker container who runs the validator could not be created or started.
     async fn start_validator(&self, container: &mut DockerContainer) {
         let mut port_map = PortMap::new();
         port_map.insert(
@@ -287,9 +346,14 @@ impl DockerNetwork {
 
     /// Generates `n` validator keys using a `rippled` instance.
     ///
+    /// # Parameters
+    /// * 'n' - the amount of validator keys to generate.
+    ///
     /// # Panics
-    /// This function panics if the JSON response from `rippled` cannot be correctly
-    /// deserialized to the `ValidationKeyCreateResponse` struct.
+    /// * If the JSON response from `rippled` cannot be correctly deserialized to the `ValidationKeyCreateResponse` struct.
+    /// * If an error occurred while creating or starting the Docker container who generates the keys.
+    /// * If an error occurred while creating or executing the 'validation_create' command.
+    /// * If an error occurred while removing the Docker container who generated the keys.
     async fn generate_keys(&self, n: u16) -> Vec<ValidatorKeyData> {
         let container_name = String::from("key_generator");
         let create_options = CreateContainerOptions {
@@ -328,8 +392,6 @@ impl DockerNetwork {
             .await
             .unwrap();
 
-        // Quick implementation of checking whether the key_generator container
-        // is available.
         loop {
             if check_validator_available(
                 DockerContainer {
@@ -399,11 +461,11 @@ impl DockerNetwork {
     }
 
     /// Generates and writes the config files for every key in `keys` to disk. The configurations
-    /// are saved to /network/validators/<name>
+    /// are saved to /network/validators/\<name\>.
     ///
     /// # Panics
-    /// This function panics when the `rippled_base.cfg` cannot be read, or the config cannot
-    /// be written to disk (no permissions/directory does not exist)
+    /// * If the `rippled_base.cfg` cannot be read.
+    /// * If the config could not be written to disk (no permissions/directory does not exist).
     fn generate_validator_configs(
         &self,
         keys: &[ValidatorKeyData],

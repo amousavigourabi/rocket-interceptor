@@ -12,22 +12,38 @@ use std::sync::Arc;
 use std::{env, io};
 use tokio::sync::Mutex;
 
-fn is_connection_valid(idx_1: u32, idx_2: u32, partitions: &Vec<Partition>) -> bool {
-    for p in partitions {
-        if p.nodes.contains(&idx_1) && p.nodes.contains(&idx_2) {
+/// Function that checks whether a connection between two peers should be established or not.
+///
+/// # Parameters
+/// * 'node_1_id' - the ID of the first node.
+/// * 'node_2_id' - the ID of the second node.
+fn is_valid_connection(node_1_id: u32, node_2_id: u32, partitions: &Vec<Partition>) -> bool {
+    for partition in partitions {
+        if partition.nodes.contains(&node_1_id) && partition.nodes.contains(&node_2_id) {
             return true;
         }
     }
     false
 }
 
+/// The entrypoint for the packet interceptor application.
+///
+/// This async function first sets up all the Docker containers who run the validator nodes.
+/// After that, it establishes connections between all peers as configured.
+/// Then, it starts all the threads that handle the messages sent between the peers.
+/// Finally, it waits for a Ctrl+C signal to correctly exit.
+///
+/// # Panics:
+/// - If the Ctrl+C handler could not be setup
+/// - If the PacketClient could not be setup
+/// - If the configuration request failed
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
+    let running_cloned = running.clone();
 
     ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
+        running_cloned.store(false, Ordering::SeqCst);
     })
     .expect("Unable to set Ctrl+C handler");
 
@@ -59,14 +75,14 @@ async fn main() -> io::Result<()> {
         nodes.push(Node::new(node.port_peer as u16));
     }
 
-    let nodes_len = network.containers.len();
+    let nodes_length = network.containers.len();
     for (i, container1) in network.containers.iter().enumerate() {
-        for (j, container2) in network.containers[(i + 1)..nodes_len].iter().enumerate() {
-            let j = i + 1 + j;
-            if !is_connection_valid(i as u32, j as u32, network_config.partitions.as_ref()) {
+        for (j, container2) in network.containers[(i + 1)..nodes_length].iter().enumerate() {
+            let j = i + j + 1; // Adjust 'j' to be the correct index in 'nodes'
+            if !is_valid_connection(i as u32, j as u32, network_config.partitions.as_ref()) {
                 continue;
             }
-            let (stream1, stream2) = peer_connector
+            let (connection_half_1, connection_half_2) = peer_connector
                 .connect_peers(
                     container1.port_peer as u16,
                     container2.port_peer as u16,
@@ -74,27 +90,36 @@ async fn main() -> io::Result<()> {
                     container2.key_data.validation_public_key.as_str(),
                 )
                 .await;
-            let (r1, w1) = tokio::io::split(stream1);
-            let (r2, w2) = tokio::io::split(stream2);
+            let (read_half_1, write_half_1) = tokio::io::split(connection_half_1);
+            let (read_half_2, write_half_2) = tokio::io::split(connection_half_2);
 
-            let n1 = &mut nodes[i];
-            n1.add_peer(Peer::new(container2.port_peer as u16, w2, r1));
-            let n2 = &mut nodes[j];
-            n2.add_peer(Peer::new(container1.port_peer as u16, w1, r2));
+            let node_1 = &mut nodes[i];
+            node_1.add_peer(Peer::new(
+                container2.port_peer as u16,
+                write_half_2,
+                read_half_1,
+            ));
+            let node_2 = &mut nodes[j];
+            node_2.add_peer(Peer::new(
+                container1.port_peer as u16,
+                write_half_1,
+                read_half_2,
+            ));
         }
     }
 
-    let mut threads = Vec::new();
+    let mut message_handlers = Vec::new();
     for node in nodes {
         let (mut read_threads, write_thread) = node.handle_messages(client.clone());
-        threads.push(write_thread);
-        threads.append(&mut read_threads);
+        message_handlers.push(write_thread);
+        message_handlers.append(&mut read_threads);
     }
 
+    // Wait for Ctrl+C signal
     while running.load(Ordering::SeqCst) {}
 
-    for thread in threads {
-        thread.abort();
+    for message_handler in message_handlers {
+        message_handler.abort();
     }
 
     network.stop_network().await;

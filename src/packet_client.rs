@@ -1,3 +1,5 @@
+//! This module is responsible for making and handling requests to the controller.
+
 use crate::log;
 use crate::logger::EXECUTION_LOG;
 use crate::packet_client::proto::{Config, GetConfig, PacketAck};
@@ -9,17 +11,25 @@ pub mod proto {
     tonic::include_proto!("packet");
 }
 
+/// Struct that represents the object that is able to call the controller module.
 #[derive(Debug)]
 pub struct PacketClient {
     pub client: PacketServiceClient<tonic::transport::Channel>,
 }
 
 impl PacketClient {
+    /// Initializes a new PacketClient that connects to the controller.
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let client = PacketServiceClient::connect("http://[::1]:50051").await?;
         Ok(Self { client })
     }
 
+    /// Sends an intercepted message to the controller, asking for an action.
+    ///
+    /// # Parameters
+    /// * 'packet_data' - the data of the intercepted message.
+    /// * 'packet_from_port' - the port of the node where the message came from.
+    /// * 'packet_to_port' - the port of the node where the message is sent to.
     pub async fn send_packet(
         &mut self,
         packet_data: Vec<u8>,
@@ -31,12 +41,12 @@ impl PacketClient {
         }
 
         match packet_from_port {
-            u32::MAX => return Err("Port not set properly".into()),
+            u32::MAX => return Err("packet_from_port not set properly".into()),
             port => port,
         };
 
         match packet_to_port {
-            u32::MAX => return Err("Port not set properly".into()),
+            u32::MAX => return Err("packet_to_port not set properly".into()),
             port => port,
         };
 
@@ -48,7 +58,7 @@ impl PacketClient {
 
         let request = tonic::Request::new(packet);
 
-        let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
+        let response = self.client.send_packet(request).await?.into_inner();
         log!(
             EXECUTION_LOG,
             "{},{},{},{},{}",
@@ -62,6 +72,10 @@ impl PacketClient {
         Ok(response)
     }
 
+    /// Sends the info of all ValidatorNodes to the controller.
+    ///
+    /// # Parameters
+    /// * 'validator_node_info_list' - A list of all the info of the ValidatorNodes.
     pub async fn send_validator_node_info(
         &mut self,
         validator_node_info_list: Vec<ValidatorNodeInfo>,
@@ -77,6 +91,7 @@ impl PacketClient {
         Ok(response.status)
     }
 
+    /// Sends a request to the controller asking for the network configuration.
     pub async fn get_config(&mut self) -> Result<Config, Box<dyn std::error::Error>> {
         let request = tonic::Request::new(GetConfig {});
         let response = self.client.get_config(request).await?.into_inner();
@@ -86,7 +101,7 @@ impl PacketClient {
     }
 }
 
-//Test work but need the python server to be running, skipped for now
+// For these test to work, the controller needs to be running.
 #[cfg(test)]
 mod integration_tests {
     use super::*;
@@ -99,36 +114,28 @@ mod integration_tests {
         let mut client = setup().await;
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-        // Call the async function and obtain the result
         let result = client.send_packet(packet_data, 2, 3).await;
 
-        // Assert that the result is Ok
         assert!(result.is_ok());
     }
     #[tokio::test]
     async fn assert_empty_bytes() {
         let mut client = setup().await;
-        // Prepare a request with invalid data
-        let packet_data: Vec<u8> = vec![]; // Empty data
+        let packet_data: Vec<u8> = vec![];
 
-        // Call the async function and obtain the result
         let result = client.send_packet(packet_data, 2, 3).await;
 
-        // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn assert_empty_port() {
         let mut client = setup().await;
-        // Prepare a request with invalid data
-        let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Empty data
+        let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let packet_from_port: u32 = u32::MAX;
 
-        // Call the async function and obtain the result
         let result = client.send_packet(packet_data, packet_from_port, 3).await;
 
-        // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
     }
 }
