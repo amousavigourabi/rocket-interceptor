@@ -11,33 +11,30 @@
 ### OpenSSL
 To install OpenSSL, see the official installation guide at https://github.com/openssl/openssl.
 Although this is the official guide, there are alternatives that may be easier for you. 
-Note that this is worked on our machines, but we cannot guarantee that this works for every machine. 
+Note that this worked on our machines, but we cannot guarantee that this works for every machine. 
 We recommend Windows users to use WSL as it is easier to install OpenSSL on it.  
 
 **Windows**
-
+Note that this is for a 64 bit machine running on an Intel chip with the x86_64 architecture. For other architectures this may be a bit different.
 For Windows, it is possible to download .exe/.msi installers via https://slproweb.com/products/Win32OpenSSL.html.
 After installation, you should set two environment variables:
 * OPENSSL_DIR = path_to\OpenSSL-Win64
 * OPENSSL_LIB_DIR = path_to\OpenSSL-Win64\lib\VC\x64\MTd
 
-Note that this is for a 64 bit machine running on an Intel chip with the x86_64 architecture. For other architectures this may be a bit different.
-
-
 **Linux**
 
-For linux, it is possible to use 'apt'.
+For Debian/Ubuntu, it is possible to use 'apt'.
 
 ```console
 sudo apt install openssl
 ```
 
-You may need to add something to your PATH variable, but that may depend on your system.
+You may need to add something to your PATH variable or set an environment variable, but that depends on your system.
 If this is necessary it will probably prompt you to do so if run OpenSSL. 
 
 **MacOS**
 
-For MacOS, it is possible to use 'brew'.
+For MacOS, it is possible to use HomeBrew.
 
 ```console
 brew install openssl
