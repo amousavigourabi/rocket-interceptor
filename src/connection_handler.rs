@@ -1,3 +1,5 @@
+//! This module is responsible for intercepting and handling all messages sent between peers.
+
 use crate::packet_client::PacketClient;
 use bytes::BytesMut;
 use log::error;
