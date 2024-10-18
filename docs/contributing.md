@@ -1,4 +1,4 @@
-## How to contribute
+# Contributing to the Rocket Packet Interceptor project
 
 1. Create a new branch from `main`
 2. Make your changes
@@ -33,7 +33,7 @@ For terminal logging we use env_logger. You can configure the log level by setti
 before running. The levels are `trace`, `debug`, `info`, `warn`, `error`.
 For example to set the log level to info you can execute the following command:
 
-```Linux
+```bash
 export RUST_LOG=xrpl_packet_interceptor=info    # Linux
 ```
 
@@ -41,7 +41,7 @@ export RUST_LOG=xrpl_packet_interceptor=info    # Linux
 set RUST_LOG=xrpl_packet_interceptor=info       # Windows Command Prompt
 ```
 
-```Windows PowerShell
+```powershell
 $env:RUST_LOG = "xrpl_packet_interceptor=info"  # Windows PowerShell
 ```
 

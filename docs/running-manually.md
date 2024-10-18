@@ -18,7 +18,7 @@ Read
 the [controller's README](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-controller-module/-/blob/main/README.md?ref_type=heads)
 for more information on how to configure these.
 
-### Running the Docker container
+### Running Docker Engine
 
 For windows and macOS, make sure Docker Engine is active by launching Docker Desktop.
 For Linux docker engine is usually running by default (on system startup).
