@@ -63,6 +63,7 @@ After executing the build script, the executable file should now be available in
 
 ## Useful resources
 
-- If you want to contribute read: [contributing.md](docs/running-manually.md)
-- If you want to run the interceptor manually read: [running-manually.md](docs/running-manually.md)
-- Document about modification to the rippled Docker image: [rippled-docker-image.md](docs/rippled-docker-image.md)
+- If you want to contribute read: [CONTRIBUTING.md](CONTRIBUTING.md)
+- If you want to run the tests read: [TESTING.md](TESTING.md)
+- If you want to run the interceptor manually read: [running-manually.md](docs/resources/running-manually.md)
+- Document about modification to the rippled Docker image: [rippled-docker-image.md](docs/resources/rippled-docker-image.md)
