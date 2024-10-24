@@ -1,4 +1,8 @@
-# Contributing to the Rocket Packet Interceptor project
+# Contributing to the Rocket Packet Interceptor
+
+The document here aims to aid developers in understanding 
+how to contribute to the controller module. Before making any changes, 
+read this file carefully. Below, you will find the common process of contributing to the project.
 
 1. Create a new branch from `main`
 2. Make your changes
