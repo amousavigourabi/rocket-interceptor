@@ -18,6 +18,14 @@ use tokio::sync::Mutex;
 /// * 'node_1_id' - the ID of the first node.
 /// * 'node_2_id' - the ID of the second node.
 fn is_valid_connection(node_1_id: u32, node_2_id: u32, partitions: &Vec<Partition>) -> bool {
+    // Nodes cannot connect with themselves.
+    if node_1_id == node_2_id {
+        return false;
+    }
+    // If empty, connect all nodes by default.
+    if partitions.is_empty() {
+        return true;
+    }
     for partition in partitions {
         if partition.nodes.contains(&node_1_id) && partition.nodes.contains(&node_2_id) {
             return true;
@@ -78,7 +86,7 @@ async fn main() -> io::Result<()> {
     for (i, container1) in network.containers.iter().enumerate() {
         for (j, container2) in network.containers[(i + 1)..nodes_length].iter().enumerate() {
             let j = i + j + 1; // Adjust 'j' to be the correct index in 'nodes'
-            if !is_valid_connection(i as u32, j as u32, network_config.partitions.as_ref()) {
+            if !is_valid_connection(i as u32, j as u32, network_config.net_partitions.as_ref()) {
                 continue;
             }
             let (connection_half_1, connection_half_2) = peer_connector

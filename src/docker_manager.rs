@@ -14,6 +14,7 @@ use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
 use bollard::Docker;
 
+use crate::is_valid_connection;
 use crate::packet_client::proto;
 use crate::packet_client::PacketClient;
 use futures_util::stream::StreamExt;
@@ -509,15 +510,18 @@ impl DockerNetwork {
 
             let mut validators_file =
                 fs::File::create(format!("{}/validators.txt", config_dir)).unwrap();
-            let mut keys_except_current = keys.to_vec();
-            keys_except_current.remove(i);
 
-            let public_keys: Vec<String> = keys_except_current
+            let unl_public_keys: Vec<String> = keys
                 .iter()
-                .map(|k| k.validation_public_key.to_string())
+                .enumerate()
+                .filter(|(j, _)| {
+                    is_valid_connection(i as u32, *j as u32, &self.config.unl_partitions)
+                })
+                .map(|(_, k)| k.validation_public_key.to_string())
                 .collect();
+
             validators_file
-                .write_all(format!("[validators]\n{}", public_keys.join("\n")).as_bytes())
+                .write_all(format!("[validators]\n{}", unl_public_keys.join("\n")).as_bytes())
                 .expect("Could not write to config file");
 
             fs::copy(ledger_json_path, format!("{}/ledger.json", config_dir)).unwrap();
@@ -535,7 +539,10 @@ mod integration_tests_docker {
     use crate::packet_client::proto::{Config, Partition};
 
     fn docker_network_setup() -> DockerNetwork {
-        let partition = Partition {
+        let net_partition = Partition {
+            nodes: vec![0, 1, 2],
+        };
+        let unl_partition = Partition {
             nodes: vec![0, 1, 2],
         };
         let config = Config {
@@ -544,7 +551,8 @@ mod integration_tests_docker {
             base_port_ws_admin: 62000,
             base_port_rpc: 63000,
             number_of_nodes: 3,
-            partitions: vec![partition],
+            net_partitions: vec![net_partition],
+            unl_partitions: vec![unl_partition],
         };
         DockerNetwork::new(config)
     }
