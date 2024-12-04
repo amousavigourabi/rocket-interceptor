@@ -14,7 +14,7 @@ use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
 use bollard::Docker;
 
-use crate::is_valid_connection;
+use crate::is_valid_unl_connection;
 use crate::packet_client::proto;
 use crate::packet_client::PacketClient;
 use futures_util::stream::StreamExt;
@@ -515,7 +515,7 @@ impl DockerNetwork {
                 .iter()
                 .enumerate()
                 .filter(|(j, _)| {
-                    is_valid_connection(i as u32, *j as u32, &self.config.unl_partitions)
+                    is_valid_unl_connection(i as u32, *j as u32, &self.config.unl_partitions)
                 })
                 .map(|(_, k)| k.validation_public_key.to_string())
                 .collect();

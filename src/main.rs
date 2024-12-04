@@ -34,6 +34,26 @@ fn is_valid_connection(node_1_id: u32, node_2_id: u32, partitions: &Vec<Partitio
     false
 }
 
+fn is_valid_unl_connection(node_1_id: u32, node_2_id: u32, partitions: &Vec<Partition>) -> bool {
+    // Nodes cannot connect with themselves.
+    if node_1_id == node_2_id {
+        return false;
+    }
+    // If empty, connect all nodes by default.
+    if partitions.is_empty() {
+        return true;
+    }
+    for partition in partitions {
+        if partition.nodes.is_empty() {
+            continue;
+        }
+        if partition.nodes[0] == node_1_id && partition.nodes.contains(&node_2_id) {
+            return true;
+        }
+    }
+    false
+}
+
 /// The entrypoint for the packet interceptor application.
 ///
 /// This async function first sets up all the Docker containers who run the validator nodes.
