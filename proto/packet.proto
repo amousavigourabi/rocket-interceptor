@@ -47,5 +47,6 @@ message Config {
     uint32 base_port_ws_admin = 3;
     uint32 base_port_rpc = 4;
     uint32 number_of_nodes = 5;
-    repeated Partition partitions = 6;
+    repeated Partition net_partitions = 6;
+    repeated Partition unl_partitions = 7;
 }

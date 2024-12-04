@@ -112,7 +112,7 @@ mod integration_tests_grpc {
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn send_packet_ok() {
         let mut client = setup().await;
-        let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let packet_data: Vec<u8> = vec![0, 0, 0, 0, 0, 2, 0, 0, 0];
 
         // Call the async function and obtain the result
         let result = client.send_packet(packet_data, 60000, 60001).await;
@@ -199,7 +199,10 @@ mod integration_tests_grpc {
     #[tokio::test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn get_config_ok() {
-        let partition = Partition {
+        let net_partition = Partition {
+            nodes: vec![0, 1, 2],
+        };
+        let unl_partition = Partition {
             nodes: vec![0, 1, 2],
         };
         let config = Config {
@@ -208,7 +211,8 @@ mod integration_tests_grpc {
             base_port_ws_admin: 62000,
             base_port_rpc: 63000,
             number_of_nodes: 3,
-            partitions: vec![partition],
+            net_partitions: vec![net_partition],
+            unl_partitions: vec![unl_partition],
         };
         let mut client = setup().await;
         let result = client.get_config().await;
