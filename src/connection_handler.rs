@@ -216,14 +216,16 @@ impl Node {
             }
         }
 
-        message_queue_sender
-            .send(Message::new(response.data, peer_to_port))
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Could not write message from {} to {} to the queue.",
-                    peer_from_port, peer_to_port,
-                )
-            });
+        for _ in 0..response.send_amount {
+            message_queue_sender
+                .send(Message::new(response.data.clone(), peer_to_port))
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Could not write message from {} to {} to the queue.",
+                        peer_from_port, peer_to_port,
+                    )
+                });
+        }
     }
 
     /// Checks a message that is contained inside buf if it is valid.
