@@ -208,6 +208,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "basex-rs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "710f3a0d047def12388a55d9cb7e7b846f4ded482a6a954e54f581784f2cdfa4"
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2097,6 +2103,8 @@ dependencies = [
 name = "xrpl-packet-interceptor"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "basex-rs",
  "bollard",
  "bytes",
  "chrono",

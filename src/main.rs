@@ -115,6 +115,8 @@ async fn main() -> io::Result<()> {
                     container2.port_peer as u16,
                     container1.key_data.validation_public_key.as_str(),
                     container2.key_data.validation_public_key.as_str(),
+                    container1.key_data.validation_seed.as_str(),
+                    container2.key_data.validation_seed.as_str(),
                 )
                 .await;
             let (read_half_1, write_half_1) = tokio::io::split(connection_half_1);

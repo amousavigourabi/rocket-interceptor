@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-const IMAGE: &str = "isvanloon/rippled-no-sig-check:latest";
+const IMAGE: &str = "xrpllabsofficial/xrpld:2.3.0";
 
 /// Struct that represents a response of a 'ValidationKeyCreate' request.
 #[derive(Debug, Deserialize)]
@@ -321,9 +321,7 @@ impl DockerNetwork {
 
         let container_config = bollard::container::Config {
             image: Some(IMAGE),
-            env: Some(vec![
-                "ENV_ARGS=--start --ledgerfile /etc/opt/ripple/ledger.json",
-            ]),
+            env: Some(vec!["ENV_ARGS=--start --ledgerfile /config/ledger.json"]),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
                 port_bindings: Some(port_map),
