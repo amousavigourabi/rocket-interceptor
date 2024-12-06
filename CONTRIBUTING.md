@@ -38,9 +38,29 @@ before running. The levels are `trace`, `debug`, `info`, `warn`, `error`.
 For example to set the log level to info you can execute the following command:
 
 ```bash
-export RUST_LOG=xrpl_packet_interceptor=info    # Linux
+export RUST_LOG=xrpl_packet_interceptor=info
 ```
 
 ```powershell
-$env:RUST_LOG = "xrpl_packet_interceptor=info"  # Windows PowerShell
+$env:RUST_LOG = "xrpl_packet_interceptor=info"
 ```
+
+## Running the interceptor manually
+
+This guide will show you how to run the interceptor manually. This is useful for debugging.
+In order to run the interceptor manually, ensure the following:
+
+1. the Controller Module (gRPC server) is running
+2. (for Windows & Mac) Docker Engine is running on your machine
+
+After you have these prerequisites, you can run the interceptor manually with `cargo run`.
+
+## Running the gRPC server
+
+This is in the controller module. You do have to run it with the NoneIteration as IterationType.
+Since this the one that does not run the interceptor as a subprocess.
+There are some other configuration options in the controller that determine how the interceptor operates such as the
+network configuration or the strategy configuration.
+Read
+the [controller's README](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-controller-module/-/blob/main/README.md?ref_type=heads)
+for more information on how to configure these.
