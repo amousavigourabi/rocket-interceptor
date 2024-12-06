@@ -69,4 +69,3 @@ After executing the build script, the executable file should now be available in
 
 - If you want to contribute read: [CONTRIBUTING.md](CONTRIBUTING.md)
 - If you want to run the tests read: [TESTING.md](TESTING.md)
-- If you want to run the interceptor manually read: [running-manually.md](docs/resources/running-manually.md)

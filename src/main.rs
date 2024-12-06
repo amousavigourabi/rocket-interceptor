@@ -17,6 +17,7 @@ use tokio::sync::Mutex;
 /// # Parameters
 /// * 'node_1_id' - the ID of the first node.
 /// * 'node_2_id' - the ID of the second node.
+/// * 'partitions' - array of partitions.
 fn is_valid_connection(node_1_id: u32, node_2_id: u32, partitions: &Vec<Partition>) -> bool {
     // Nodes cannot connect with themselves.
     if node_1_id == node_2_id {
@@ -34,6 +35,12 @@ fn is_valid_connection(node_1_id: u32, node_2_id: u32, partitions: &Vec<Partitio
     false
 }
 
+/// Function that checks whether a connection between two peers' directional UNL is valid.
+///
+/// # Parameters
+/// * 'node_1_id' - the ID of the first node.
+/// * 'node_2_id' - the ID of the second node.
+/// * 'partitions' - array of partitions.
 fn is_valid_unl_connection(node_1_id: u32, node_2_id: u32, partitions: &Vec<Partition>) -> bool {
     // Nodes cannot connect with themselves.
     if node_1_id == node_2_id {

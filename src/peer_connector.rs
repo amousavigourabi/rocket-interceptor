@@ -38,6 +38,8 @@ impl PeerConnector {
     /// * 'port_peer_2' - the port of the second peer.
     /// * 'pub_key_peer_1' - the public key of the first peer.
     /// * 'pub_key_peer_2' - the public key of the second peer.
+    /// * 'seed_peer_1' - the validation seed of the first peer.
+    /// * 'seed_peer_2' - the validation seed of the second peer.
     pub async fn connect_peers(
         &self,
         port_peer_1: u16,
@@ -72,7 +74,8 @@ impl PeerConnector {
     /// # Parameters
     /// * 'ip' - the ip to which we connect to.
     /// * 'port' - the port to which we connect to.
-    /// * 'pub_key_of_peer_we_pretend_to_be' - the public key of the peer we pretend to be.
+    /// * 'initiator_public_key' - the public key of the peer we pretend to be.
+    /// * 'initiator_seed' - the validation seed of the peer we pretend to be.
     ///
     /// # Panics
     /// * If an error occurred while creating and connecting the SslStream.
@@ -169,6 +172,8 @@ impl PeerConnector {
     /// # Parameters
     /// * 'ip' - the IP address to which a connection should be made.
     /// * 'port' - the port to which a connection should be made.
+    /// * 'public_key' - the public key of the node initiating the connection.
+    /// * 'seed' - the validation seed of the node initiating the connection.
     ///
     /// # Panics
     /// * If the ip:port specified is invalid.
@@ -273,8 +278,9 @@ impl PeerConnector {
     /// since we removed the handshake verification check in the rippled source code.
     ///
     /// # Parameters
-    /// * 'pub_key_peer_to' - the public key to be filled in into the request.
-    fn format_upgrade_request_content(pub_key_peer_to: &str, base64: &str) -> String {
+    /// * 'public_key' - the public key to be filled in into the request.
+    /// * 'base64_sig' - the base64 encoded session signature to be filled in into the request.
+    fn format_upgrade_request_content(public_key: &str, base64_sig: &str) -> String {
         format!(
             "\
             GET / HTTP/1.1\r\n\
@@ -284,7 +290,7 @@ impl PeerConnector {
             Public-Key: {}\r\n\
             Session-Signature: {}\r\n\
             \r\n",
-            pub_key_peer_to, base64
+            public_key, base64_sig
         )
     }
 }
