@@ -1308,6 +1308,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
 
 [[package]]
+name = "rocket-interceptor"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "basex-rs",
+ "bollard",
+ "bytes",
+ "chrono",
+ "ctrlc",
+ "env_logger",
+ "futures-util",
+ "hex",
+ "http 1.1.0",
+ "httparse",
+ "lazy_static",
+ "log",
+ "openssl",
+ "prost",
+ "rand 0.9.0-alpha.1",
+ "regex",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-openssl",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2097,39 +2130,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86c949fede1d13936a99f14fafd3e76fd642b556dd2ce96287fbe2e0151bfac6"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "xrpl-packet-interceptor"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "basex-rs",
- "bollard",
- "bytes",
- "chrono",
- "ctrlc",
- "env_logger",
- "futures-util",
- "hex",
- "http 1.1.0",
- "httparse",
- "lazy_static",
- "log",
- "openssl",
- "prost",
- "rand 0.9.0-alpha.1",
- "regex",
- "secp256k1",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tokio-openssl",
- "tokio-stream",
- "toml",
- "tonic",
- "tonic-build",
 ]
 
 [[package]]

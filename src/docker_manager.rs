@@ -340,7 +340,11 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        match self.docker.create_container::<&str, &str>(Some(create_options), container_config).await {
+        match self
+            .docker
+            .create_container::<&str, &str>(Some(create_options), container_config)
+            .await
+        {
             Ok(container_response) => {
                 let id = container_response.id;
                 match self.docker.start_container::<String>(&id, None).await {
@@ -538,23 +542,17 @@ impl DockerNetwork {
 mod integration_tests_docker {
     use super::*;
     use crate::packet_client;
-    use crate::packet_client::proto::{Config, Partition};
+    use crate::packet_client::proto::Config;
 
     fn docker_network_setup() -> DockerNetwork {
-        let net_partition = Partition {
-            nodes: vec![0, 1, 2],
-        };
-        let unl_partition = Partition {
-            nodes: vec![0, 1, 2],
-        };
         let config = Config {
             base_port_peer: 60000,
             base_port_ws: 61000,
             base_port_ws_admin: 62000,
             base_port_rpc: 63000,
             number_of_nodes: 3,
-            net_partitions: vec![net_partition],
-            unl_partitions: vec![unl_partition],
+            net_partitions: vec![],
+            unl_partitions: vec![],
         };
         DockerNetwork::new(config)
     }

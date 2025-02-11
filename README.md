@@ -1,4 +1,4 @@
-# Rocket's packet interceptor
+# Rocket's interceptor module
 
 The interceptor module is responsible for initializing the XRPL validator node network and intercepting
 all the messages sent between the nodes. This module is run as a subprocess of the controller, it is not a standalone 
