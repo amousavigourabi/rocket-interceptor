@@ -340,18 +340,22 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let id = self
-            .docker
-            .create_container::<&str, &str>(Some(create_options), container_config)
-            .await
-            .unwrap()
-            .id;
-        self.docker
-            .start_container::<String>(&id, None)
-            .await
-            .unwrap();
-
-        container.id = Some(id.clone());
+        match self.docker.create_container::<&str, &str>(Some(create_options), container_config).await {
+            Ok(container_response) => {
+                let id = container_response.id;
+                match self.docker.start_container::<String>(&id, None).await {
+                    Ok(_) => {
+                        container.id = Some(id.clone());
+                    }
+                    Err(e) => {
+                        panic!("Failed to start container, the ports you are trying to use to run this container might already be used by another process, so try again with new base_ports: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                panic!("Failed to create container: {}", e);
+            }
+        }
     }
 
     /// Generates `n` validator keys using a `rippled` instance.
