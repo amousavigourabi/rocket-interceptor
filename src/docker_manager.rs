@@ -340,18 +340,26 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let id = self
+        match self
             .docker
             .create_container::<&str, &str>(Some(create_options), container_config)
             .await
-            .unwrap()
-            .id;
-        self.docker
-            .start_container::<String>(&id, None)
-            .await
-            .unwrap();
-
-        container.id = Some(id.clone());
+        {
+            Ok(container_response) => {
+                let id = container_response.id;
+                match self.docker.start_container::<String>(&id, None).await {
+                    Ok(_) => {
+                        container.id = Some(id.clone());
+                    }
+                    Err(e) => {
+                        panic!("Failed to start the xrpld container, try checking your base port configuration values to make sure they are not bound by another process: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                panic!("Failed to create container: {}", e);
+            }
+        }
     }
 
     /// Generates `n` validator keys using a `rippled` instance.
@@ -534,23 +542,17 @@ impl DockerNetwork {
 mod integration_tests_docker {
     use super::*;
     use crate::packet_client;
-    use crate::packet_client::proto::{Config, Partition};
+    use crate::packet_client::proto::Config;
 
     fn docker_network_setup() -> DockerNetwork {
-        let net_partition = Partition {
-            nodes: vec![0, 1, 2],
-        };
-        let unl_partition = Partition {
-            nodes: vec![0, 1, 2],
-        };
         let config = Config {
             base_port_peer: 60000,
             base_port_ws: 61000,
             base_port_ws_admin: 62000,
             base_port_rpc: 63000,
             number_of_nodes: 3,
-            net_partitions: vec![net_partition],
-            unl_partitions: vec![unl_partition],
+            net_partitions: vec![],
+            unl_partitions: vec![],
         };
         DockerNetwork::new(config)
     }

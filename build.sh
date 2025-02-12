@@ -1,6 +1,6 @@
 #!/bin/bash
 
 cargo clean
-rm xrpl-packet-interceptor
+rm rocket-interceptor
 cargo build --release
-cp ./target/release/xrpl-packet-interceptor .
+cp ./target/release/rocket-interceptor .

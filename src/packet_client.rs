@@ -102,7 +102,6 @@ impl PacketClient {
 #[cfg(test)]
 mod integration_tests_grpc {
     use super::*;
-    use crate::packet_client::proto::Partition;
 
     async fn setup() -> PacketClient {
         PacketClient::new().await.unwrap()
@@ -112,7 +111,55 @@ mod integration_tests_grpc {
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn send_packet_ok() {
         let mut client = setup().await;
-        let packet_data: Vec<u8> = vec![0, 0, 0, 0, 0, 2, 0, 0, 0];
+        let validator_node_info_list = vec![
+            ValidatorNodeInfo {
+                peer_port: 60000,
+                ws_public_port: 61000,
+                ws_admin_port: 62000,
+                rpc_port: 63000,
+                status: "active".to_string(),
+                validation_key: "READ SOIL DASH FUND ISLE LEN SOD OUT MACE ERIC DRAG MILT"
+                    .to_string(),
+                validation_private_key: "paAgnNZ9NaKTACGT3dGBV2eNHRxXNo8hRhNQNEWRJ23m5isp93t"
+                    .to_string(),
+                validation_public_key: "n9KjTKEaHJ12Kuon5PDZ7fQAo5ExZ6cKH4h3L8q6m9YhoYqeBDho"
+                    .to_string(),
+                validation_seed: "shM8uxbqE5g43G3VwKt6TM2pLvFan".to_string(),
+            },
+            ValidatorNodeInfo {
+                peer_port: 60001,
+                ws_public_port: 61001,
+                ws_admin_port: 62001,
+                rpc_port: 63001,
+                status: "active".to_string(),
+                validation_key: "DEAR SOIL DASH FUND ISLE LEN SOD OUT MACE ERIC DRAG MILT"
+                    .to_string(),
+                validation_private_key: "qaAgnNZ9NaKTACGT3dGBV2eNHRxXNo8hRhNQNEWRJ23m5isp93t"
+                    .to_string(),
+                validation_public_key: "N9KjTKEaHJ12Kuon5PDZ7fQAo5ExZ6cKH4h3L8q6m9YhoYqeBDho"
+                    .to_string(),
+                validation_seed: "ShM8uxbqE5g43G3VwKt6TM2pLvFan".to_string(),
+            },
+        ];
+
+        // Needed for network setup in controller (in particular the port_to_id_dict)
+        let _result = client
+            .send_validator_node_info(validator_node_info_list)
+            .await;
+
+        // TMProposeSet message
+        let packet_data: Vec<u8> = vec![
+            0, 0, 0, 184, 0, 33, 8, 0, 18, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26, 33, 3, 251, 21, 226, 60, 126, 222,
+            229, 250, 120, 210, 50, 32, 74, 25, 165, 57, 146, 119, 65, 209, 152, 15, 69, 20, 6,
+            112, 35, 100, 20, 1, 36, 31, 32, 146, 138, 250, 249, 2, 42, 71, 48, 69, 2, 33, 0, 136,
+            72, 196, 177, 67, 252, 16, 143, 230, 231, 71, 14, 133, 42, 13, 88, 137, 2, 106, 202,
+            225, 9, 140, 41, 226, 117, 32, 55, 231, 159, 95, 0, 2, 32, 126, 182, 84, 76, 245, 184,
+            194, 197, 249, 214, 85, 102, 123, 8, 108, 152, 57, 133, 200, 238, 225, 34, 0, 181, 133,
+            254, 79, 236, 69, 197, 31, 192, 50, 32, 165, 85, 233, 250, 229, 143, 175, 154, 148, 16,
+            222, 87, 82, 210, 113, 63, 101, 189, 38, 206, 187, 28, 13, 9, 126, 156, 148, 59, 120,
+            224, 114, 49,
+        ];
 
         // Call the async function and obtain the result
         let result = client.send_packet(packet_data, 60000, 60001).await;
@@ -199,20 +246,14 @@ mod integration_tests_grpc {
     #[tokio::test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn get_config_ok() {
-        let net_partition = Partition {
-            nodes: vec![0, 1, 2],
-        };
-        let unl_partition = Partition {
-            nodes: vec![0, 1, 2],
-        };
         let config = Config {
             base_port_peer: 60000,
             base_port_ws: 61000,
             base_port_ws_admin: 62000,
             base_port_rpc: 63000,
             number_of_nodes: 3,
-            net_partitions: vec![net_partition],
-            unl_partitions: vec![unl_partition],
+            net_partitions: vec![],
+            unl_partitions: vec![],
         };
         let mut client = setup().await;
         let result = client.get_config().await;

@@ -1,4 +1,4 @@
-# Contributing to the Rocket Packet Interceptor
+# Contributing to the Rocket Interceptor
 
 The document here aims to aid developers in understanding 
 how to contribute to the controller module. Before making any changes, 
@@ -38,11 +38,11 @@ before running. The levels are `trace`, `debug`, `info`, `warn`, `error`.
 For example to set the log level to info you can execute the following command:
 
 ```bash
-export RUST_LOG=xrpl_packet_interceptor=info
+export RUST_LOG=rocket_interceptor=info
 ```
 
 ```powershell
-$env:RUST_LOG = "xrpl_packet_interceptor=info"
+$env:RUST_LOG = "rocket_interceptor=info"
 ```
 
 ## Running the interceptor manually
@@ -62,5 +62,5 @@ Since this the one that does not run the interceptor as a subprocess.
 There are some other configuration options in the controller that determine how the interceptor operates such as the
 network configuration or the strategy configuration.
 Read
-the [controller's README](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-controller-module/-/blob/main/README.md?ref_type=heads)
+the [controller's README](https://github.com/diseb-lab/rocket)
 for more information on how to configure these.

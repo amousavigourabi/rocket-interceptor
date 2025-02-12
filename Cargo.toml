@@ -1,5 +1,5 @@
 [package]
-name = "xrpl-packet-interceptor"
+name = "rocket-interceptor"
 version = "0.1.0"
 edition = "2021"
 
