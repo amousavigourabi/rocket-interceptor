@@ -352,7 +352,7 @@ impl DockerNetwork {
                         container.id = Some(id.clone());
                     }
                     Err(e) => {
-                        panic!("Failed to start container, the ports you are trying to use to run this container might already be used by another process, so try again with new base_ports: {}", e);
+                        panic!("Failed to start the xrpld container, try checking your base port configuration values to make sure they are not bound by another process: {}", e);
                     }
                 }
             }
