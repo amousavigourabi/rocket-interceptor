@@ -5,11 +5,10 @@ use bytes::BytesMut;
 use log::error;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_openssl::SslStream;
 
@@ -104,10 +103,7 @@ impl Node {
     ///
     /// # Parameters
     /// * 'client' - the PacketClient where it can make requests to the controller for the action of every message.
-    pub fn handle_messages(
-        self,
-        client: Arc<Mutex<PacketClient>>,
-    ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
+    pub fn handle_messages(self, client: PacketClient) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (sender, receiver) = mpsc::channel::<Message>();
         let mut read_threads = Vec::new();
         let mut peer_to_write_half = HashMap::new();
@@ -139,7 +135,7 @@ impl Node {
     /// * 'message_queue_sender' - the queue where the received messages are enqueued
     async fn read_loop(
         mut read_half: ReadHalf<SslStream<TcpStream>>,
-        client: Arc<Mutex<PacketClient>>,
+        client: PacketClient,
         peer_from_port: u16,
         peer_to_port: u16,
         message_queue_sender: mpsc::Sender<Message>,
@@ -190,7 +186,7 @@ impl Node {
     /// * If the message sent to the queue will never be received, meaning there is no receiver.
     async fn handle_message_and_action(
         buffered_message: BytesMut,
-        client: Arc<Mutex<PacketClient>>,
+        mut client: PacketClient,
         peer_from_port: u16,
         peer_to_port: u16,
         message_queue_sender: mpsc::Sender<Message>,
@@ -198,8 +194,6 @@ impl Node {
     ) {
         let message = Self::check_message(buffered_message);
         let response = client
-            .lock()
-            .await
             .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
             .await
             .expect("Error occurred while requesting message and action from the controller.");

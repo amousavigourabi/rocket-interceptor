@@ -5,7 +5,6 @@ use std::env::current_dir;
 use std::fs;
 use std::io::Read;
 use std::io::Write;
-use std::sync::Arc;
 use std::time::Duration;
 
 use bollard::container::{CreateContainerOptions, RemoveContainerOptions};
@@ -21,7 +20,6 @@ use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::sync::Mutex;
 
 const IMAGE: &str = "xrpllabsofficial/xrpld:2.3.0";
 
@@ -141,7 +139,7 @@ impl DockerNetwork {
     ///
     /// # Panics
     /// * If an error occurred while sending the ValidatorNodeInfo to the controller.
-    pub async fn initialize_network(&mut self, client: Arc<Mutex<PacketClient>>) {
+    pub async fn initialize_network(&mut self, mut client: PacketClient) {
         // Stop all running validator nodes before starting new network
         self.stop_network().await;
         self.download_image().await;
@@ -182,8 +180,6 @@ impl DockerNetwork {
             self.containers.push(validator_container);
         }
         client
-            .lock()
-            .await
             .send_validator_node_info(validator_node_info_list)
             .await
             .unwrap();
@@ -289,13 +285,6 @@ impl DockerNetwork {
             String::from("51235/tcp"),
             Some(vec![PortBinding {
                 host_port: Some(container.port_peer.to_string()),
-                ..Default::default()
-            }]),
-        );
-        port_map.insert(
-            String::from("6005/tcp"),
-            Some(vec![PortBinding {
-                host_port: Some(container.port_ws.to_string()),
                 ..Default::default()
             }]),
         );
@@ -690,7 +679,7 @@ mod integration_tests_docker {
             "This test requires a clean docker starting state"
         );
         let client = match packet_client::PacketClient::new().await {
-            Ok(client) => Arc::new(Mutex::new(client)),
+            Ok(client) => client,
             error => panic!("Error creating client: {:?}", error),
         };
         docker_network.initialize_network(client).await;
