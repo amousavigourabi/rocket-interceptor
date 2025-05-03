@@ -10,7 +10,6 @@ use crate::peer_connector::PeerConnector;
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 /// Function that checks whether a connection between two peers should be established or not.
 ///
@@ -84,15 +83,13 @@ async fn main() -> io::Result<()> {
 
     env_logger::init();
 
-    let client = match packet_client::PacketClient::new().await {
-        Ok(client) => Arc::new(Mutex::new(client)),
+    let mut client = match packet_client::PacketClient::new().await {
+        Ok(client) => client,
         error => panic!("Error creating client: {:?}", error),
     };
 
     // Get config from controller
     let network_config = client
-        .lock()
-        .await
         .get_config()
         .await
         .expect("Could not get config from controller");

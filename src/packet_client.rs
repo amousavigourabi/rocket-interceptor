@@ -15,6 +15,14 @@ pub struct PacketClient {
     pub client: PacketServiceClient<tonic::transport::Channel>,
 }
 
+impl Clone for PacketClient {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+        }
+    }
+}
+
 impl PacketClient {
     /// Initializes a new PacketClient that connects to the controller.
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
