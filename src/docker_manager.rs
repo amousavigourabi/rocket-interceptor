@@ -21,7 +21,7 @@ use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 
-const IMAGE: &str = "xrpllabsofficial/xrpld:2.3.0";
+const IMAGE: &str = env!("ROCKET_XRPLD_DOCKER_CONTAINER", "xrpllabsofficial/xrpld:2.4.0");
 
 /// Struct that represents a response of a 'ValidationKeyCreate' request.
 #[derive(Debug, Deserialize)]
