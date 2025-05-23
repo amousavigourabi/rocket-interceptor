@@ -21,7 +21,6 @@ use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 
-const IMAGE: &str = env!("ROCKET_XRPLD_DOCKER_CONTAINER", "xrpllabsofficial/xrpld:2.4.0");
 
 /// Struct that represents a response of a 'ValidationKeyCreate' request.
 #[derive(Debug, Deserialize)]
@@ -258,7 +257,7 @@ impl DockerNetwork {
         self.docker
             .create_image(
                 Some(CreateImageOptions {
-                    from_image: IMAGE,
+                    from_image: option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0"),
                     ..Default::default()
                 }),
                 None,
@@ -309,7 +308,7 @@ impl DockerNetwork {
         };
 
         let container_config = bollard::container::Config {
-            image: Some(IMAGE),
+            image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
             env: Some(vec!["ENV_ARGS=--start --ledgerfile /config/ledger.json"]),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
@@ -369,7 +368,7 @@ impl DockerNetwork {
         };
 
         let container_config = bollard::container::Config {
-            image: Some(IMAGE),
+            image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
                 mounts: Some(vec![Mount {
