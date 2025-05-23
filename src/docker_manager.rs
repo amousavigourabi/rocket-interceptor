@@ -1,5 +1,6 @@
 //! This module is responsible for setting up and tearing down the Docker containers who run the validator nodes.
 
+use std::collections::HashMap;
 use log::{debug, info};
 use std::env::current_dir;
 use std::fs;
@@ -10,7 +11,7 @@ use std::time::Duration;
 use bollard::container::{CreateContainerOptions, RemoveContainerOptions};
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::image::CreateImageOptions;
-use bollard::models::{HostConfig, Mount, MountTypeEnum, PortBinding, PortMap};
+use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 
 use crate::is_valid_unl_connection;
@@ -279,28 +280,36 @@ impl DockerNetwork {
     /// * If it could not format the directory path to the 'config' directory.
     /// * If the Docker container who runs the validator could not be created or started.
     async fn start_validator(&self, container: &mut DockerContainer) {
-        let mut port_map = PortMap::new();
-        port_map.insert(
-            String::from("51235/tcp"),
-            Some(vec![PortBinding {
-                host_port: Some(container.port_peer.to_string()),
-                ..Default::default()
-            }]),
-        );
-        port_map.insert(
-            String::from("6006/tcp"),
-            Some(vec![PortBinding {
-                host_port: Some(container.port_ws_admin.to_string()),
-                ..Default::default()
-            }]),
-        );
-        port_map.insert(
-            String::from("5005/tcp"),
-            Some(vec![PortBinding {
-                host_port: Some(container.port_rpc.to_string()),
-                ..Default::default()
-            }]),
-        );
+
+
+        // Create exposed ports without binding them to host
+        let mut exposed_ports = HashMap::new();
+        exposed_ports.insert("51235/tcp", HashMap::new());
+        exposed_ports.insert("6006/tcp", HashMap::new());
+        exposed_ports.insert("5005/tcp", HashMap::new());
+
+        // let mut port_map = PortMap::new();
+        // port_map.insert(
+        //     String::from("51235/tcp"),
+        //     Some(vec![PortBinding {
+        //         host_port: Some(container.port_peer.to_string()),
+        //         ..Default::default()
+        //     }]),
+        // );
+        // port_map.insert(
+        //     String::from("6006/tcp"),
+        //     Some(vec![PortBinding {
+        //         host_port: Some(container.port_ws_admin.to_string()),
+        //         ..Default::default()
+        //     }]),
+        // );
+        // port_map.insert(
+        //     String::from("5005/tcp"),
+        //     Some(vec![PortBinding {
+        //         host_port: Some(container.port_rpc.to_string()),
+        //         ..Default::default()
+        //     }]),
+        // );
 
         let create_options = CreateContainerOptions {
             name: container.name.as_str(),
@@ -310,9 +319,9 @@ impl DockerNetwork {
         let container_config = bollard::container::Config {
             image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
             env: Some(vec!["ENV_ARGS=--start --ledgerfile /config/ledger.json"]),
+            exposed_ports: Some(exposed_ports),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
-                port_bindings: Some(port_map),
                 mounts: Some(vec![Mount {
                     target: Some(String::from("/config")),
                     source: Some(format!(
