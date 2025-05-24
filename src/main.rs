@@ -100,7 +100,7 @@ async fn main() -> io::Result<()> {
     network.initialize_network(client.clone(), &hostname_prefix).await;
     network.wait_for_startup().await;
 
-    let peer_connector = PeerConnector::new(6006); // TODO: Make this configurable
+    let peer_connector = PeerConnector::new(51235); // TODO: Make this configurable
 
     let mut nodes = Vec::new();
     for node in network.containers.iter() {
