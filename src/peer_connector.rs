@@ -4,7 +4,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use basex_rs::{BaseX, ALPHABET_RIPPLE};
 use bytes::{Buf, BytesMut};
-use log::{debug, error, info};
+use log::{debug, error};
 use openssl::sha::Sha512;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
 use secp256k1::{Message as CryptoMessage, Secp256k1, SecretKey};

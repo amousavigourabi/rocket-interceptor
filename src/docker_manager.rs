@@ -274,6 +274,10 @@ impl DockerNetwork {
             name: container.name.as_str(),
             ..Default::default()
         };
+
+        let current_dir = current_dir().unwrap();
+        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
+        
         let container_config = bollard::container::Config {
             hostname: Some(container.name.as_str()),
             image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
@@ -283,11 +287,7 @@ impl DockerNetwork {
                 auto_remove: Some(true),
                 mounts: Some(vec![Mount {
                     target: Some(String::from("/config")),
-                    source: Some(format!(
-                        "{}/network/validators/{}/config",
-                        option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir().unwrap().to_str().unwrap()),
-                        container.name.as_str()
-                    )),
+                    source: Some(format!("{}/network/{}/config", network_path, container.name.as_str())),
                     typ: Some(MountTypeEnum::BIND),
                     ..Default::default()
                 }]),
@@ -335,6 +335,9 @@ impl DockerNetwork {
             ..Default::default()
         };
 
+        let current_dir = current_dir().unwrap();
+        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
+        
         let container_config = bollard::container::Config {
             hostname: Some(container_name.as_str()),
             image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
@@ -342,11 +345,7 @@ impl DockerNetwork {
                 auto_remove: Some(true),
                 mounts: Some(vec![Mount {
                     target: Some(String::from("/config")),
-                    source: Some(format!(
-                        "{}/network/{}/config",
-                        current_dir().unwrap().to_str().unwrap(),
-                        container_name.as_str()
-                    )),
+                    source: Some(format!("{}/network/{}/config", network_path, container_name.as_str() )),
                     typ: Some(MountTypeEnum::BIND),
                     ..Default::default()
                 }]),
@@ -437,14 +436,17 @@ impl DockerNetwork {
     /// # Panics
     /// * If the `rippled_base.cfg` cannot be read.
     /// * If the config could not be written to disk (no permissions/directory does not exist).
-    fn generate_validator_configs(
+    fn generate_validator_configs( 
         &self,
         keys: &[ValidatorKeyData],
         hostname_prefix: &str,
     ) -> Vec<(String, ValidatorKeyData)> {
-        let base_config_path = "network/rippled_base.cfg";
-        let ledger_json_path = "network/ledger.json";
-        let base_config_file = fs::File::open(base_config_path);
+        let current_dir = current_dir().unwrap();
+        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
+        
+        let base_config_path = format!("{}/network/rippled_base.cfg", network_path);
+        let ledger_json_path = format!("{}/network/ledger.json", network_path);
+        let base_config_file = fs::File::open(&base_config_path);
 
         let mut base_config_contents = String::new();
         base_config_file
@@ -459,7 +461,7 @@ impl DockerNetwork {
                 .clone()
                 .replace("{validation_seed}", key.validation_seed.as_str());
 
-            let config_dir = format!("network/validators/{}/config", container_name.clone());
+            let config_dir = format!("{}/network/{}/config",network_path , container_name.clone());
             fs::create_dir_all(config_dir.as_str()).expect("Could not create directory.");
 
             let mut config_file =
@@ -484,7 +486,7 @@ impl DockerNetwork {
                 .write_all(format!("[validators]\n{}", unl_public_keys.join("\n")).as_bytes())
                 .expect("Could not write to config file");
 
-            fs::copy(ledger_json_path, format!("{}/ledger.json", config_dir)).unwrap();
+            fs::copy(&ledger_json_path, format!("{}/ledger.json", config_dir)).unwrap();
 
             ret.push((container_name, key.clone()));
         }
