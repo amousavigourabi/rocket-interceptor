@@ -497,7 +497,7 @@ impl DockerNetwork {
         hostname_prefix: &str,
     ){
         let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
-
+        debug!("network_path: {}", network_path);
         let base_config_path = format!("{}/network/key_generator/config/rippled.cfg", network_path);
 
         let config_dir = format!("{}/network/{}_key_generator/config", network_path, hostname_prefix);
