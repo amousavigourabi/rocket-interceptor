@@ -285,7 +285,7 @@ impl DockerNetwork {
                     target: Some(String::from("/config")),
                     source: Some(format!(
                         "{}/network/validators/{}/config",
-                        current_dir().unwrap().to_str().unwrap(),
+                        option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir().unwrap().to_str().unwrap()),
                         container.name.as_str()
                     )),
                     typ: Some(MountTypeEnum::BIND),
