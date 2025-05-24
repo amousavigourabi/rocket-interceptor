@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use log::{debug, info};
-use std::env::current_dir;
 use std::{env, fs};
 use std::io::Read;
 use std::io::Write;
@@ -13,7 +12,8 @@ use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
-
+use bollard::network::ConnectNetworkOptions;
+use bollard::service::EndpointSettings;
 use crate::is_valid_unl_connection;
 use crate::packet_client::proto;
 use crate::packet_client::PacketClient;
@@ -277,6 +277,7 @@ impl DockerNetwork {
         };
 
         let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
+        let network_name = "rocket_net";
 
         let container_config = bollard::container::Config {
             hostname: Some(container.name.as_str()),
@@ -303,12 +304,27 @@ impl DockerNetwork {
         {
             Ok(container_response) => {
                 let id = container_response.id;
-                match self.docker.start_container::<String>(&id, None).await {
+                
+                match self.docker.connect_network(
+                    network_name,
+                    ConnectNetworkOptions {
+                        container: id.clone(),
+                        endpoint_config: EndpointSettings::default(),
+                    },
+                ).await
+                {
                     Ok(_) => {
-                        container.id = Some(id.clone());
+                        match self.docker.start_container::<String>(&id, None).await {
+                            Ok(_) => {
+                                container.id = Some(id.clone());
+                            }
+                            Err(e) => {
+                                panic!("Failed to start the xrpld container, try checking your hostname_prefix configuration values to make sure they are not bound by another container: {}", e);
+                            }
+                        }
                     }
                     Err(e) => {
-                        panic!("Failed to start the xrpld container, try checking your hostname_prefix configuration values to make sure they are not bound by another process: {}", e);
+                        panic!("Failed to connect the xrpld container to the network: {}", e);
                     }
                 }
             }
