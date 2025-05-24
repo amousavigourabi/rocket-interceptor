@@ -276,8 +276,7 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let current_dir = current_dir().unwrap();
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
 
         let container_config = bollard::container::Config {
             hostname: Some(container.name.as_str()),
@@ -336,8 +335,7 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let current_dir = current_dir().unwrap();
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
 
         let container_config = bollard::container::Config {
             hostname: Some(container_name.as_str()),
@@ -442,8 +440,8 @@ impl DockerNetwork {
         keys: &[ValidatorKeyData],
         hostname_prefix: &str,
     ) -> Vec<(String, ValidatorKeyData)> {
-        let current_dir = current_dir().unwrap();
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+        // let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
 
         let base_config_path = format!("{}/network/rippled_base.cfg", network_path);
         let ledger_json_path = format!("{}/network/ledger.json", network_path);
@@ -498,8 +496,7 @@ impl DockerNetwork {
         &self,
         hostname_prefix: &str,
     ){
-        let current_dir = current_dir().unwrap();
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
 
         let base_config_path = format!("{}/network/key_generator/config/rippled.cfg", network_path);
 
