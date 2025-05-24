@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use log::{debug, info};
 use std::env::current_dir;
-use std::fs;
+use std::{env, fs};
 use std::io::Read;
 use std::io::Write;
 use std::time::Duration;
@@ -277,8 +277,8 @@ impl DockerNetwork {
         };
 
         let current_dir = current_dir().unwrap();
-        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
-        
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+
         let container_config = bollard::container::Config {
             hostname: Some(container.name.as_str()),
             image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
@@ -337,8 +337,8 @@ impl DockerNetwork {
         };
 
         let current_dir = current_dir().unwrap();
-        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
-        
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+
         let container_config = bollard::container::Config {
             hostname: Some(container_name.as_str()),
             image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
@@ -437,14 +437,14 @@ impl DockerNetwork {
     /// # Panics
     /// * If the `rippled_base.cfg` cannot be read.
     /// * If the config could not be written to disk (no permissions/directory does not exist).
-    fn generate_validator_configs( 
+    fn generate_validator_configs(
         &self,
         keys: &[ValidatorKeyData],
         hostname_prefix: &str,
     ) -> Vec<(String, ValidatorKeyData)> {
         let current_dir = current_dir().unwrap();
-        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
-        
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+
         let base_config_path = format!("{}/network/rippled_base.cfg", network_path);
         let ledger_json_path = format!("{}/network/ledger.json", network_path);
         let base_config_file = fs::File::open(&base_config_path);
@@ -493,19 +493,19 @@ impl DockerNetwork {
         }
         ret
     }
-    
+
     fn generate_key_generator_config(
         &self,
         hostname_prefix: &str,
     ){
         let current_dir = current_dir().unwrap();
-        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
-        
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
+
         let base_config_path = format!("{}/network/key_generator/config/rippled.cfg", network_path);
 
         let config_dir = format!("{}/network/{}_key_generator/config", network_path, hostname_prefix);
         fs::create_dir_all(config_dir.as_str()).expect("Could not create directory.");
-        
+
         fs::copy(&base_config_path, format!("{}/rippled.cfg", config_dir)).unwrap();
     }
 }
