@@ -9,8 +9,8 @@ service PacketService {
 
 message Packet {
     bytes data = 1;
-    uint32 from_port = 2;
-    uint32 to_port = 3;
+    string from_hostname = 2;
+    string to_hostname = 3;
 }
 
 message PacketAck {
@@ -20,15 +20,12 @@ message PacketAck {
 }
 
 message ValidatorNodeInfo {
-    uint32 peer_port = 1;
-    uint32 ws_public_port = 2;
-    uint32 ws_admin_port = 3;
-    uint32 rpc_port = 4;
-    string status = 5;
-    string validation_key = 6;
-    string validation_private_key = 7;
-    string validation_public_key = 8;
-    string validation_seed = 9;
+    string hostname = 1;
+    string status = 2;
+    string validation_key = 3;
+    string validation_private_key = 4;
+    string validation_public_key = 5;
+    string validation_seed = 6;
 }
 
 message ValidatorNodeInfoAck {
@@ -42,11 +39,8 @@ message Partition {
 }
 
 message Config {
-    uint32 base_port_peer = 1;
-    uint32 base_port_ws = 2;
-    uint32 base_port_ws_admin = 3;
-    uint32 base_port_rpc = 4;
-    uint32 number_of_nodes = 5;
-    repeated Partition net_partitions = 6;
-    repeated Partition unl_partitions = 7;
+    string hostname_prefix = 1;
+    uint32 number_of_nodes = 2;
+    repeated Partition net_partitions = 3;
+    repeated Partition unl_partitions = 4;
 }

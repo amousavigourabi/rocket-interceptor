@@ -4,13 +4,11 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use basex_rs::{BaseX, ALPHABET_RIPPLE};
 use bytes::{Buf, BytesMut};
-use log::{debug, error};
+use log::{debug, error, info};
 use openssl::sha::Sha512;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
 use secp256k1::{Message as CryptoMessage, Secp256k1, SecretKey};
-use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
-use std::str::FromStr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_openssl::SslStream;
@@ -18,8 +16,9 @@ use tokio_openssl::SslStream;
 /// Struct that represents the object that connects peers with each other.
 #[derive(Clone)]
 pub struct PeerConnector {
-    /// The IP address of every peer. Only the ports of the peers differ.
-    pub ip_addr: String,
+    /// The port of every peer. Only the hostnames of the peers differ. 
+    /// TODO: Stupid decision jeez
+    pub port: u16,
 }
 
 impl PeerConnector {
@@ -27,8 +26,8 @@ impl PeerConnector {
     ///
     /// # Parameters
     /// * 'ip_addr' - the IP address of all peers.
-    pub fn new(ip_addr: String) -> Self {
-        Self { ip_addr }
+    pub fn new(port: u16) -> Self {
+        Self { port }
     }
 
     /// Connects two peers with each other. Returns both halves of the connection, so the interceptor is in between.
@@ -42,23 +41,23 @@ impl PeerConnector {
     /// * 'seed_peer_2' - the validation seed of the second peer.
     pub async fn connect_peers(
         &self,
-        port_peer_1: u16,
-        port_peer_2: u16,
+        hostname_peer_1: &str,
+        hostname_peer_2: &str,
         pub_key_peer_1: &str,
         pub_key_peer_2: &str,
         seed_peer_1: &str,
         seed_peer_2: &str,
     ) -> (SslStream<TcpStream>, SslStream<TcpStream>) {
         let connection_half_1 = Self::setup_connection_half(
-            self.ip_addr.as_str(),
-            port_peer_1,
+            hostname_peer_1, 
+            self.port,
             pub_key_peer_2,
             seed_peer_2,
         )
         .await;
         let connection_half_2 = Self::setup_connection_half(
-            self.ip_addr.as_str(),
-            port_peer_2,
+            hostname_peer_2,
+            self.port,
             pub_key_peer_1,
             seed_peer_1,
         )
@@ -82,13 +81,13 @@ impl PeerConnector {
     /// * If an error occurred while reading or writing to/from the SslStream.
     /// * If the response of the upgrade request is invalid.
     async fn setup_connection_half(
-        ip: &str,
+        hostname: &str,
         port: u16,
         initiator_public_key: &str,
         initiator_seed: &str,
     ) -> SslStream<TcpStream> {
         let mut ssl_stream =
-            Self::create_and_connect_ssl_stream(ip, port, initiator_public_key, initiator_seed)
+            Self::create_and_connect_ssl_stream(hostname, port, initiator_public_key, initiator_seed)
                 .await;
 
         let mut buf = BytesMut::new();
@@ -179,13 +178,14 @@ impl PeerConnector {
     /// * If the ip:port specified is invalid.
     /// * If the SslStream could not be created or connected to.
     async fn create_and_connect_ssl_stream(
-        ip: &str,
+        hostname: &str,
         port: u16,
         public_key: &str,
         seed: &str,
     ) -> SslStream<TcpStream> {
-        let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
-        let tcp_stream = TcpStream::connect(socket_address).await.unwrap();
+        let address = format!("{}:{}", hostname, port);
+        println!("Connecting to {}...", address);
+        let tcp_stream = TcpStream::connect(address).await.unwrap();
 
         tcp_stream
             .set_nodelay(true)
@@ -303,8 +303,8 @@ mod unit_tests {
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn peer_connector_new_test() {
-        let peer_connector = PeerConnector::new("127.0.0.1".to_string());
-        assert_eq!(peer_connector.ip_addr, "127.0.0.1".to_string());
+        let peer_connector = PeerConnector::new(51235);
+        assert_eq!(peer_connector.port, 51235);
     }
 
     #[test]

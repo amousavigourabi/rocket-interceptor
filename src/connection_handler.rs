@@ -24,8 +24,8 @@ const SIZE_64MB: usize = 64 * SIZE_MB;
 pub struct Message {
     /// The data of the intercepted message.
     pub data: Vec<u8>,
-    /// The port of the peer the message is supposed to be sent to.
-    pub peer_to_port: u16,
+    /// The hostname of the peer the message is supposed to be sent to.
+    pub peer_to_hostname: String, 
 }
 
 impl Message {
@@ -34,16 +34,16 @@ impl Message {
     /// # Parameters
     /// * 'data' - the data of the intercepted message.
     /// * 'peer_to_port' - the port of the peer the message is supposed to be sent to.
-    pub fn new(data: Vec<u8>, peer_to_port: u16) -> Self {
-        Self { data, peer_to_port }
+    pub fn new(data: Vec<u8>, peer_to_hostname: String) -> Self {
+        Self { data, peer_to_hostname }
     }
 }
 
 /// Struct that represents a peer from a node's perspective.
 #[derive(Debug)]
 pub struct Peer {
-    /// The port of the peer where the connection is established to. This is also its ID.
-    pub port: u16,
+    /// The hostname of the peer where the connection is established to. This is also its ID.
+    pub hostname: String,
     /// The half that the interceptor uses to write to that peer.
     pub write_half: WriteHalf<SslStream<TcpStream>>,
     /// the half that the node writes to if it wants to send a message to the peer.
@@ -58,12 +58,12 @@ impl Peer {
     /// * 'write_half' - the half that the interceptor uses to write to that peer.
     /// * 'read_half' - the half that the node writes to if it wants to send a message to the peer.
     pub fn new(
-        port: u16,
+        hostname: String,
         write_half: WriteHalf<SslStream<TcpStream>>,
         read_half: ReadHalf<SslStream<TcpStream>>,
     ) -> Self {
         Self {
-            port,
+            hostname,
             write_half,
             read_half,
         }
@@ -73,8 +73,8 @@ impl Peer {
 /// Struct that represents a node in the network.
 #[derive(Debug)]
 pub struct Node {
-    /// The port of the peer where connections can be established to. The port uniquely identifies them.
-    pub port: u16,
+    /// The hostname of the peer where connections can be established to. The port uniquely identifies them.
+    pub hostname: String,
     /// The peers the node is connected to.
     pub peers: Vec<Peer>,
 }
@@ -84,9 +84,9 @@ impl Node {
     ///
     /// # Parameters
     /// * 'port' - the port of the peer where connections can be established to. The port uniquely identifies.
-    pub fn new(port: u16) -> Self {
+    pub fn new(hostname: String) -> Self {
         Self {
-            port,
+            hostname,
             peers: Vec::new(),
         }
     }
@@ -112,12 +112,12 @@ impl Node {
             let read_thread = tokio::spawn(Self::read_loop(
                 peer.read_half,
                 client.clone(),
-                self.port,
-                peer.port,
+                self.hostname.clone(),
+                peer.hostname.clone(),
                 sender.clone(),
             ));
             read_threads.push(read_thread);
-            peer_to_write_half.insert(peer.port, peer.write_half);
+            peer_to_write_half.insert(peer.hostname, peer.write_half);
         }
 
         let write_thread = tokio::spawn(Self::write_loop(receiver, peer_to_write_half));
@@ -136,8 +136,8 @@ impl Node {
     async fn read_loop(
         mut read_half: ReadHalf<SslStream<TcpStream>>,
         client: PacketClient,
-        peer_from_port: u16,
-        peer_to_port: u16,
+        peer_from_hostname: String,
+        peer_to_hostname: String,
         message_queue_sender: mpsc::Sender<Message>,
     ) {
         loop {
@@ -154,15 +154,15 @@ impl Node {
             if size_read == 0 {
                 panic!(
                     "SslStream from peer {} to peer {} has been closed.",
-                    peer_from_port, peer_to_port
+                    peer_from_hostname, peer_to_hostname
                 );
             }
 
             tokio::spawn(Self::handle_message_and_action(
                 buffer,
                 client.clone(),
-                peer_from_port,
-                peer_to_port,
+                peer_from_hostname.to_string(),
+                peer_to_hostname.to_string(),
                 message_queue_sender.clone(),
                 read_moment,
             ));
@@ -187,14 +187,14 @@ impl Node {
     async fn handle_message_and_action(
         buffered_message: BytesMut,
         mut client: PacketClient,
-        peer_from_port: u16,
-        peer_to_port: u16,
+        peer_from_hostname: String,
+        peer_to_hostname: String,
         message_queue_sender: mpsc::Sender<Message>,
         read_moment: Instant,
     ) {
         let message = Self::check_message(buffered_message);
         let response = client
-            .send_packet(message, u32::from(peer_from_port), u32::from(peer_to_port))
+            .send_packet(message, &peer_from_hostname, &peer_to_hostname)
             .await
             .expect("Error occurred while requesting message and action from the controller.");
 
@@ -212,11 +212,11 @@ impl Node {
 
         for _ in 0..response.send_amount {
             message_queue_sender
-                .send(Message::new(response.data.clone(), peer_to_port))
+                .send(Message::new(response.data.clone(), peer_to_hostname.to_string()))
                 .unwrap_or_else(|_| {
                     panic!(
                         "Could not write message from {} to {} to the queue.",
-                        peer_from_port, peer_to_port,
+                        peer_from_hostname.to_string(), peer_to_hostname.to_string(),
                     )
                 });
         }
@@ -273,12 +273,12 @@ impl Node {
     /// * If an error occurred while sending the message to the other peer.
     async fn write_loop(
         message_queue_receiver: mpsc::Receiver<Message>,
-        mut peer_to_write_half: HashMap<u16, WriteHalf<SslStream<TcpStream>>>,
+        mut peer_to_write_half: HashMap<String, WriteHalf<SslStream<TcpStream>>>,
     ) {
         loop {
             let message = message_queue_receiver.recv().unwrap();
 
-            let write_half = peer_to_write_half.get_mut(&message.peer_to_port).unwrap();
+            let write_half = peer_to_write_half.get_mut(&message.peer_to_hostname).unwrap();
 
             write_half
                 .write_all(&message.data)
@@ -298,20 +298,20 @@ mod unit_tests {
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_message_new() {
         let data = vec![1, 2, 3, 4, 5];
-        let peer_to_port = 8080;
-        let message = Message::new(data.clone(), peer_to_port);
+        let peer_to_hostname = "TEST_validator_0";
+        let message = Message::new(data.clone(), peer_to_hostname.to_string());
 
         assert_eq!(message.data, data);
-        assert_eq!(message.peer_to_port, peer_to_port);
+        assert_eq!(message.peer_to_hostname, peer_to_hostname.to_string());
     }
 
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn test_node_new() {
-        let port = 8080;
-        let node = Node::new(port);
+        let hostname = "TEST_validator_0";
+        let node = Node::new(hostname.to_string());
 
-        assert_eq!(node.port, port);
+        assert_eq!(node.hostname, hostname.to_string());
         assert_eq!(node.peers.len(), 0);
     }
 

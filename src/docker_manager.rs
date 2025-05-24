@@ -52,14 +52,6 @@ pub struct DockerContainer {
     pub id: Option<String>,
     /// The name of the container.
     pub name: String,
-    /// The port where the node listens for peer connections.
-    pub port_peer: u32,
-    /// The port where the node listens for WebSocket connections.
-    pub port_ws: u32,
-    /// The port where the node listens for WebSocket connections for admins.
-    pub port_ws_admin: u32,
-    /// The port where the node listens for RPC requests.
-    pub port_rpc: u32,
     /// The data of the keys of this node.
     pub key_data: ValidatorKeyData,
 }
@@ -139,38 +131,26 @@ impl DockerNetwork {
     ///
     /// # Panics
     /// * If an error occurred while sending the ValidatorNodeInfo to the controller.
-    pub async fn initialize_network(&mut self, mut client: PacketClient) {
+    pub async fn initialize_network(&mut self, mut client: PacketClient, hostname_prefix: &str) {
         // Stop all running validator nodes before starting new network
-        self.stop_network().await;
+        self.stop_network(hostname_prefix).await;
         self.download_image().await;
 
-        let validator_keys = self.generate_keys(self.config.number_of_nodes as u16).await;
-        let names_with_keys = self.generate_validator_configs(&validator_keys);
-
-        let base_port_peer = self.config.base_port_peer;
-        let base_port_ws = self.config.base_port_ws;
-        let base_port_ws_admin = self.config.base_port_ws_admin;
-        let base_port_rpc = self.config.base_port_rpc;
+        let validator_keys = self.generate_keys(self.config.number_of_nodes as u16, hostname_prefix).await;
+        let names_with_keys = self.generate_validator_configs(&validator_keys, hostname_prefix);
 
         let mut validator_node_info_list = vec![];
 
-        for (i, (name, keys)) in names_with_keys.iter().enumerate() {
+        for (name, keys) in names_with_keys.iter() {
             let mut validator_container = DockerContainer {
                 id: None,
                 name: name.clone(),
-                port_peer: base_port_peer + i as u32,
-                port_ws: base_port_ws + i as u32,
-                port_ws_admin: base_port_ws_admin + i as u32,
-                port_rpc: base_port_rpc + i as u32,
                 key_data: keys.clone(),
             };
             self.start_validator(&mut validator_container).await;
             info!("Started docker container {}", name.clone());
             validator_node_info_list.push(proto::ValidatorNodeInfo {
-                peer_port: validator_container.port_peer,
-                ws_public_port: validator_container.port_ws,
-                ws_admin_port: validator_container.port_ws_admin,
-                rpc_port: validator_container.port_rpc,
+                hostname: validator_container.name.clone(),
                 status: validator_container.key_data.status.clone(),
                 validation_key: validator_container.key_data.validation_key.clone(),
                 validation_private_key: validator_container.key_data.validation_private_key.clone(),
@@ -191,7 +171,7 @@ impl DockerNetwork {
     /// # Panics
     /// * If it could not fetch the list of running containers from the Docker API.
     /// * If it could not terminate any running container.
-    pub async fn stop_network(&self) {
+    pub async fn stop_network(&self, hostname_prefix: &str) {
         let running_containers = self
             .docker
             .list_containers::<String>(None)
@@ -202,7 +182,9 @@ impl DockerNetwork {
                 for name in names {
                     debug!("{}", name);
                     // Docker container names always start with a slash
-                    if name.starts_with("/validator_") || name.eq("/key_generator") {
+                    let validator_name_start = format!("/{}_validator_", hostname_prefix);
+                    let key_generator_name = format!("/{}_key_generator", hostname_prefix);
+                    if name.starts_with(&validator_name_start) || name.eq(&key_generator_name) {
                         debug!(
                             "Stopping container (auto removed): {}",
                             container.id.clone().unwrap().as_str()
@@ -284,39 +266,16 @@ impl DockerNetwork {
 
         // Create exposed ports without binding them to host
         let mut exposed_ports = HashMap::new();
-        exposed_ports.insert("51235/tcp", HashMap::new());
-        exposed_ports.insert("6006/tcp", HashMap::new());
-        exposed_ports.insert("5005/tcp", HashMap::new());
-
-        // let mut port_map = PortMap::new();
-        // port_map.insert(
-        //     String::from("51235/tcp"),
-        //     Some(vec![PortBinding {
-        //         host_port: Some(container.port_peer.to_string()),
-        //         ..Default::default()
-        //     }]),
-        // );
-        // port_map.insert(
-        //     String::from("6006/tcp"),
-        //     Some(vec![PortBinding {
-        //         host_port: Some(container.port_ws_admin.to_string()),
-        //         ..Default::default()
-        //     }]),
-        // );
-        // port_map.insert(
-        //     String::from("5005/tcp"),
-        //     Some(vec![PortBinding {
-        //         host_port: Some(container.port_rpc.to_string()),
-        //         ..Default::default()
-        //     }]),
-        // );
+        exposed_ports.insert("51235/tcp", HashMap::new()); // Peer port
+        exposed_ports.insert("6006/tcp", HashMap::new()); // ws admin port
+        exposed_ports.insert("5005/tcp", HashMap::new()); // rpc port
 
         let create_options = CreateContainerOptions {
             name: container.name.as_str(),
             ..Default::default()
         };
-
         let container_config = bollard::container::Config {
+            hostname: Some(container.name.as_str()),
             image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
             env: Some(vec!["ENV_ARGS=--start --ledgerfile /config/ledger.json"]),
             exposed_ports: Some(exposed_ports),
@@ -349,7 +308,7 @@ impl DockerNetwork {
                         container.id = Some(id.clone());
                     }
                     Err(e) => {
-                        panic!("Failed to start the xrpld container, try checking your base port configuration values to make sure they are not bound by another process: {}", e);
+                        panic!("Failed to start the xrpld container, try checking your hostname_prefix configuration values to make sure they are not bound by another process: {}", e);
                     }
                 }
             }
@@ -369,14 +328,15 @@ impl DockerNetwork {
     /// * If an error occurred while creating or starting the Docker container who generates the keys.
     /// * If an error occurred while creating or executing the 'validation_create' command.
     /// * If an error occurred while removing the Docker container who generated the keys.
-    async fn generate_keys(&self, n: u16) -> Vec<ValidatorKeyData> {
-        let container_name = String::from("key_generator");
+    async fn generate_keys(&self, n: u16, hostname_prefix: &str) -> Vec<ValidatorKeyData> {
+        let container_name = format!("{}_key_generator", hostname_prefix); 
         let create_options = CreateContainerOptions {
             name: container_name.as_str(),
             ..Default::default()
         };
 
         let container_config = bollard::container::Config {
+            hostname: Some(container_name.as_str()),
             image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
@@ -412,10 +372,6 @@ impl DockerNetwork {
                 DockerContainer {
                     id: Some(id.clone()),
                     name: container_name.clone(),
-                    port_peer: 0,
-                    port_ws: 0,
-                    port_ws_admin: 0,
-                    port_rpc: 0,
                     key_data: ValidatorKeyData {
                         status: "success".to_string(),
                         validation_key: "".to_string(),
@@ -484,6 +440,7 @@ impl DockerNetwork {
     fn generate_validator_configs(
         &self,
         keys: &[ValidatorKeyData],
+        hostname_prefix: &str,
     ) -> Vec<(String, ValidatorKeyData)> {
         let base_config_path = "network/rippled_base.cfg";
         let ledger_json_path = "network/ledger.json";
@@ -497,7 +454,7 @@ impl DockerNetwork {
 
         let mut ret: Vec<(String, ValidatorKeyData)> = Vec::new();
         for (i, key) in keys.iter().enumerate() {
-            let container_name = format!("validator_{}", i);
+            let container_name = format!("{}_validator_{}",hostname_prefix, i);
             let new_config_contents = base_config_contents
                 .clone()
                 .replace("{validation_seed}", key.validation_seed.as_str());
@@ -543,10 +500,7 @@ mod integration_tests_docker {
 
     fn docker_network_setup() -> DockerNetwork {
         let config = Config {
-            base_port_peer: 60000,
-            base_port_ws: 61000,
-            base_port_ws_admin: 62000,
-            base_port_rpc: 63000,
+            hostname_prefix: "TEST".to_string(),
             number_of_nodes: 3,
             net_partitions: vec![],
             unl_partitions: vec![],
@@ -570,7 +524,7 @@ mod integration_tests_docker {
             0,
             "This test requires a clean docker starting state"
         );
-        let keys = docker_network.generate_keys(3).await;
+        let keys = docker_network.generate_keys(3, "TEST").await;
         assert_eq!(keys.len(), 3);
         assert_eq!(
             docker_network
@@ -605,15 +559,15 @@ mod integration_tests_docker {
             },
         ];
         let docker_network = docker_network_setup();
-        let configs = docker_network.generate_validator_configs(&keys);
+        let configs = docker_network.generate_validator_configs(&keys, "TEST");
         assert_eq!(configs.len(), 2);
-        assert_eq!(configs[0].0, "validator_0");
-        assert_eq!(configs[1].0, "validator_1");
+        assert_eq!(configs[0].0, "TEST_validator_0");
+        assert_eq!(configs[1].0, "TEST_validator_1");
         assert_eq!(configs[0].1, keys[0]);
         assert_eq!(configs[1].1, keys[1]);
 
         // check if the files for the first validator are created
-        let dir1 = "./network/validators/validator_0/config/";
+        let dir1 = "./network/validators/TEST_validator_0/config/";
         assert!(
             fs::metadata(format!("{}{}", &dir1, "ledger.json")).is_ok(),
             "File not found, path: {}{}",
@@ -641,7 +595,7 @@ mod integration_tests_docker {
         );
 
         // check if the files for the second validator are created
-        let dir2 = "./network/validators/validator_1/config/";
+        let dir2 = "./network/validators/TEST_validator_1/config/";
         assert!(
             fs::metadata(format!("{}{}", &dir2, "ledger.json")).is_ok(),
             "File not found, path: {}{}",
@@ -690,7 +644,7 @@ mod integration_tests_docker {
             Ok(client) => client,
             error => panic!("Error creating client: {:?}", error),
         };
-        docker_network.initialize_network(client).await;
+        docker_network.initialize_network(client, "TEST").await;
         assert_eq!(
             docker_network.containers.len(),
             3,
@@ -721,7 +675,7 @@ mod integration_tests_docker {
             }
         }
 
-        docker_network.stop_network().await;
+        docker_network.stop_network("TEST").await;
         assert_eq!(
             docker_network
                 .docker

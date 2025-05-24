@@ -26,7 +26,7 @@ impl Clone for PacketClient {
 impl PacketClient {
     /// Initializes a new PacketClient that connects to the controller.
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let client = PacketServiceClient::connect("http://[::1]:50051").await?;
+        let client = PacketServiceClient::connect("http://[::1]:50051").await?; 
         Ok(Self { client })
     }
 
@@ -39,37 +39,37 @@ impl PacketClient {
     pub async fn send_packet(
         &mut self,
         packet_data: Vec<u8>,
-        packet_from_port: u32,
-        packet_to_port: u32,
+        packet_from_hostname: &str, 
+        packet_to_hostname: &str, 
     ) -> Result<PacketAck, Box<dyn std::error::Error>> {
         if packet_data.is_empty() {
             return Err("Packet data is empty".into());
         }
 
-        match packet_from_port {
-            u32::MAX => return Err("packet_from_port not set properly".into()),
-            port => port,
+        match packet_from_hostname {
+            "NONE" => return Err("packet_from_hostname not set properly".into()),
+            hostname => hostname,
         };
 
-        match packet_to_port {
-            u32::MAX => return Err("packet_to_port not set properly".into()),
-            port => port,
+        match packet_to_hostname {
+            "NONE" => return Err("packet_to_hostname not set properly".into()),
+            hostname => hostname,
         };
 
         let packet = Packet {
             data: packet_data.clone(),
-            from_port: packet_from_port,
-            to_port: packet_to_port,
+            from_hostname: packet_from_hostname.to_string(), 
+            to_hostname: packet_to_hostname.to_string(), 
         };
 
         let request = tonic::Request::new(packet);
 
         let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
         debug!(
-            "action: {}, from_port: {}, to_port: {}, original_data: {}, possibly_mutated_data: {}",
+            "action: {}, from_hostname: {}, to_hostname: {}, original_data: {}, possibly_mutated_data: {}",
             response.action,
-            packet_from_port,
-            packet_to_port,
+            packet_from_hostname,
+            packet_to_hostname,
             hex::encode(packet_data),
             hex::encode(&response.data),
         );
@@ -121,10 +121,7 @@ mod integration_tests_grpc {
         let mut client = setup().await;
         let validator_node_info_list = vec![
             ValidatorNodeInfo {
-                peer_port: 60000,
-                ws_public_port: 61000,
-                ws_admin_port: 62000,
-                rpc_port: 63000,
+                hostname: "TEST_validator_0".to_string(),
                 status: "active".to_string(),
                 validation_key: "READ SOIL DASH FUND ISLE LEN SOD OUT MACE ERIC DRAG MILT"
                     .to_string(),
@@ -135,10 +132,7 @@ mod integration_tests_grpc {
                 validation_seed: "shM8uxbqE5g43G3VwKt6TM2pLvFan".to_string(),
             },
             ValidatorNodeInfo {
-                peer_port: 60001,
-                ws_public_port: 61001,
-                ws_admin_port: 62001,
-                rpc_port: 63001,
+                hostname: "TEST_validator_1".to_string(),
                 status: "active".to_string(),
                 validation_key: "DEAR SOIL DASH FUND ISLE LEN SOD OUT MACE ERIC DRAG MILT"
                     .to_string(),
@@ -170,7 +164,7 @@ mod integration_tests_grpc {
         ];
 
         // Call the async function and obtain the result
-        let result = client.send_packet(packet_data, 60000, 60001).await;
+        let result = client.send_packet(packet_data, "TEST_validator_0", "TEST_validator_1").await;
 
         // Assert that the result is Ok
         assert!(
@@ -187,7 +181,7 @@ mod integration_tests_grpc {
         let packet_data: Vec<u8> = vec![]; // Empty data
 
         // Call the async function and obtain the result
-        let result = client.send_packet(packet_data, 2, 3).await;
+        let result = client.send_packet(packet_data, "TEST_validator_0", "TEST_validator_1").await;
 
         // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
@@ -199,10 +193,9 @@ mod integration_tests_grpc {
         let mut client = setup().await;
         // Prepare a request with invalid data
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Empty data
-        let packet_from_port: u32 = u32::MAX;
 
         // Call the async function and obtain the result
-        let result = client.send_packet(packet_data, packet_from_port, 3).await;
+        let result = client.send_packet(packet_data, "NONE", "TEST_validator_0").await;
 
         // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
@@ -214,10 +207,9 @@ mod integration_tests_grpc {
         let mut client = setup().await;
         // Prepare a request with invalid data
         let packet_data: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Empty data
-        let packet_to_port: u32 = u32::MAX;
 
         // Call the async function and obtain the result
-        let result = client.send_packet(packet_data, 2, packet_to_port).await;
+        let result = client.send_packet(packet_data, "TEST_validator_0", "NONE").await;
 
         // Assert that the result is not Ok (i.e., Err)
         assert!(result.is_err());
@@ -228,10 +220,7 @@ mod integration_tests_grpc {
     async fn validator_node_info_ok() {
         let mut client = setup().await;
         let validator_node_info_list = vec![ValidatorNodeInfo {
-            peer_port: 60000,
-            ws_public_port: 61000,
-            ws_admin_port: 62000,
-            rpc_port: 63000,
+            hostname: "TEST_validator_0".to_string(),
             status: "active".to_string(),
             validation_key: "READ SOIL DASH FUND ISLE LEN SOD OUT MACE ERIC DRAG MILT".to_string(),
             validation_private_key: "paAgnNZ9NaKTACGT3dGBV2eNHRxXNo8hRhNQNEWRJ23m5isp93t"
@@ -255,10 +244,7 @@ mod integration_tests_grpc {
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     async fn get_config_ok() {
         let config = Config {
-            base_port_peer: 60000,
-            base_port_ws: 61000,
-            base_port_ws_admin: 62000,
-            base_port_rpc: 63000,
+            hostname_prefix: "TEST".to_string(),
             number_of_nodes: 3,
             net_partitions: vec![],
             unl_partitions: vec![],

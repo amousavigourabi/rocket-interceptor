@@ -95,15 +95,16 @@ async fn main() -> io::Result<()> {
         .expect("Could not get config from controller");
 
     // Init docker network
+    let hostname_prefix = network_config.hostname_prefix.clone();
     let mut network = DockerNetwork::new(network_config.clone());
-    network.initialize_network(client.clone()).await;
+    network.initialize_network(client.clone(), &hostname_prefix).await;
     network.wait_for_startup().await;
 
-    let peer_connector = PeerConnector::new("127.0.0.1".to_string());
+    let peer_connector = PeerConnector::new(51235); // TODO: Make this configurable
 
     let mut nodes = Vec::new();
     for node in network.containers.iter() {
-        nodes.push(Node::new(node.port_peer as u16));
+        nodes.push(Node::new(node.name.clone()));
     }
 
     let nodes_length = network.containers.len();
@@ -115,8 +116,8 @@ async fn main() -> io::Result<()> {
             }
             let (connection_half_1, connection_half_2) = peer_connector
                 .connect_peers(
-                    container1.port_peer as u16,
-                    container2.port_peer as u16,
+                    &container1.name,
+                    &container2.name,
                     container1.key_data.validation_public_key.as_str(),
                     container2.key_data.validation_public_key.as_str(),
                     container1.key_data.validation_seed.as_str(),
@@ -128,13 +129,13 @@ async fn main() -> io::Result<()> {
 
             let node_1 = &mut nodes[i];
             node_1.add_peer(Peer::new(
-                container2.port_peer as u16,
+                container2.name.clone(),
                 write_half_2,
                 read_half_1,
             ));
             let node_2 = &mut nodes[j];
             node_2.add_peer(Peer::new(
-                container1.port_peer as u16,
+                container1.name.clone(),
                 write_half_1,
                 read_half_2,
             ));
@@ -155,6 +156,6 @@ async fn main() -> io::Result<()> {
         message_handler.abort();
     }
 
-    network.stop_network().await;
+    network.stop_network(&hostname_prefix).await;
     Ok(())
 }
