@@ -136,6 +136,7 @@ impl DockerNetwork {
         self.stop_network(hostname_prefix).await;
         self.download_image().await;
 
+        self.generate_key_generator_config(hostname_prefix);
         let validator_keys = self.generate_keys(self.config.number_of_nodes as u16, hostname_prefix).await;
         let names_with_keys = self.generate_validator_configs(&validator_keys, hostname_prefix);
 
@@ -491,6 +492,21 @@ impl DockerNetwork {
             ret.push((container_name, key.clone()));
         }
         ret
+    }
+    
+    fn generate_key_generator_config(
+        &self,
+        hostname_prefix: &str,
+    ){
+        let current_dir = current_dir().unwrap();
+        let network_path = option_env!("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap());
+        
+        let base_config_path = format!("{}/network/key_generator/config/rippled.cfg", network_path);
+
+        let config_dir = format!("{}/network/{}_key_generator/config", network_path, hostname_prefix);
+        fs::create_dir_all(config_dir.as_str()).expect("Could not create directory.");
+        
+        fs::copy(&base_config_path, format!("{}/rippled.cfg", config_dir)).unwrap();
     }
 }
 
