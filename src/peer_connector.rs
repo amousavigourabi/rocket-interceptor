@@ -184,7 +184,6 @@ impl PeerConnector {
         seed: &str,
     ) -> SslStream<TcpStream> {
         let address = format!("{}:{}", hostname, port);
-        println!("Connecting to {}...", address);
         let tcp_stream = TcpStream::connect(address).await.unwrap();
 
         tcp_stream

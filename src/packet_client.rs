@@ -63,7 +63,6 @@ impl PacketClient {
         };
 
         let request = tonic::Request::new(packet);
-
         let response = self.client.send_packet(request).await?.into_inner(); // we send to controller and are waiting for the response
         debug!(
             "action: {}, from_hostname: {}, to_hostname: {}, original_data: {}, possibly_mutated_data: {}",

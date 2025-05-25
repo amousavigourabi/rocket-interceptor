@@ -238,10 +238,11 @@ impl DockerNetwork {
     /// # Panics
     /// * If an error occurred while downloading the image.
     async fn download_image(&mut self) {
+        let image = env::var("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0".to_string());
         self.docker
             .create_image(
                 Some(CreateImageOptions {
-                    from_image: option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0"),
+                    from_image: image.as_str(),
                     ..Default::default()
                 }),
                 None,
@@ -278,10 +279,11 @@ impl DockerNetwork {
 
         let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
         let network_name = "rocket_net";
+        let image = env::var("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0".to_string());
 
         let container_config = bollard::container::Config {
             hostname: Some(container.name.as_str()),
-            image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
+            image: Some(image.as_str()),
             env: Some(vec!["ENV_ARGS=--start --ledgerfile /config/ledger.json"]),
             exposed_ports: Some(exposed_ports),
             host_config: Some(HostConfig {
@@ -352,10 +354,11 @@ impl DockerNetwork {
         };
 
         let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
+        let image = env::var("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0".to_string());
 
         let container_config = bollard::container::Config {
             hostname: Some(container_name.as_str()),
-            image: Some(option_env!("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0")),
+            image: Some(image.as_str()),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
                 mounts: Some(vec![Mount {
@@ -474,7 +477,8 @@ impl DockerNetwork {
             let container_name = format!("{}_validator_{}",hostname_prefix, i);
             let new_config_contents = base_config_contents
                 .clone()
-                .replace("{validation_seed}", key.validation_seed.as_str());
+                .replace("{validation_seed}", key.validation_seed.as_str())
+                .replace("{hostname_prefix}", hostname_prefix);
 
             let config_dir = format!("{}/network/{}/config",network_path , container_name.clone());
             fs::create_dir_all(config_dir.as_str()).expect("Could not create directory.");
