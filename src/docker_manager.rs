@@ -7,13 +7,14 @@ use std::io::Read;
 use std::io::Write;
 use std::time::Duration;
 
-use bollard::container::{CreateContainerOptions, RemoveContainerOptions};
+use bollard::container::{CreateContainerOptions, RemoveContainerOptions, StartContainerOptions, WaitContainerOptions};
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use bollard::network::ConnectNetworkOptions;
 use bollard::service::EndpointSettings;
+use bollard::volume::CreateVolumeOptions;
 use crate::is_valid_unl_connection;
 use crate::packet_client::proto;
 use crate::packet_client::PacketClient;
@@ -21,7 +22,6 @@ use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::Value;
-
 
 /// Struct that represents a response of a 'ValidationKeyCreate' request.
 #[derive(Debug, Deserialize)]
@@ -264,7 +264,46 @@ impl DockerNetwork {
     /// * If it could not format the directory path to the 'config' directory.
     /// * If the Docker container who runs the validator could not be created or started.
     async fn start_validator(&self, container: &mut DockerContainer) {
+        let volume_name = format!("{}_volume", container.name.clone());
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
 
+        self.docker.create_volume(CreateVolumeOptions {
+            name: volume_name.clone(),
+            ..Default::default()
+        }).await.expect("Cannot create volume");
+
+        let cp_command = format!("cp -r /shared/network/{}/config/* /config", container.name);
+        let container_id = self.docker.create_container(
+            Some(CreateContainerOptions {
+                name: format!("{}_volume_copy", container.name.clone()),
+                ..Default::default()
+            }),
+            bollard::container::Config {
+                image: Some("alpine:latest"),
+                cmd: Some(vec!["sh", "-c", &cp_command]),
+                host_config: Some(HostConfig {
+                    auto_remove: Some(true),
+                    mounts: Some(vec![Mount {
+                        target: Some(String::from("/config")),
+                        source: Some(volume_name.clone()),
+                        typ: Some(MountTypeEnum::VOLUME),
+                        ..Default::default()
+                    },
+                    Mount{
+                        target: Some(String::from("/shared")),
+                        source: Some(network_path),
+                        typ: Some(MountTypeEnum::VOLUME),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }
+        ).await.unwrap().id;
+
+        self.docker.start_container(container_id.as_str(), None::<StartContainerOptions<String>>).await.expect("Copy container not started");
+        self.docker.wait_container(container_id.as_str(), None::<WaitContainerOptions<String>>).try_next().await.expect("Didn't wait on container??");
+        // self.docker.remove_container(container_id.as_str(), Some(RemoveContainerOptions{ force: true, ..Default::default()})).await.expect("Stop container failed");
 
         // Create exposed ports without binding them to host
         let mut exposed_ports = HashMap::new();
@@ -277,7 +316,6 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
         let network_name = "rocket_net";
         let image = env::var("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0".to_string());
 
@@ -290,8 +328,8 @@ impl DockerNetwork {
                 auto_remove: Some(true),
                 mounts: Some(vec![Mount {
                     target: Some(String::from("/config")),
-                    source: Some(format!("{}/network/{}/config", network_path, container.name.as_str())),
-                    typ: Some(MountTypeEnum::BIND),
+                    source: Some(volume_name.clone()),
+                    typ: Some(MountTypeEnum::VOLUME),
                     ..Default::default()
                 }]),
                 ..Default::default()
@@ -347,13 +385,55 @@ impl DockerNetwork {
     /// * If an error occurred while creating or executing the 'validation_create' command.
     /// * If an error occurred while removing the Docker container who generated the keys.
     async fn generate_keys(&self, n: u16, hostname_prefix: &str) -> Vec<ValidatorKeyData> {
-        let container_name = format!("{}_key_generator", hostname_prefix); 
+        let container_name = format!("{}_key_generator", hostname_prefix);
+
+        let volume_name = format!("{}_volume", container_name.clone());
+        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
+
+        self.docker.create_volume(CreateVolumeOptions {
+            name: volume_name.clone(),
+            ..Default::default()
+        }).await.expect("Cannot create volume");
+
+        let cp_command = format!("cp -r /shared/network/{}/config/* /config", container_name);
+        let container_id = self.docker.create_container(
+            Some(CreateContainerOptions {
+                name: format!("{}_volume_copy", container_name.clone()),
+                ..Default::default()
+            }),
+            bollard::container::Config {
+                image: Some("alpine:latest"),
+                cmd: Some(vec!["sh", "-c", &cp_command]),
+                host_config: Some(HostConfig {
+                    auto_remove: Some(true),
+                    mounts: Some(vec![Mount {
+                        target: Some(String::from("/config")),
+                        source: Some(volume_name.clone()),
+                        typ: Some(MountTypeEnum::VOLUME),
+                        ..Default::default()
+                    },
+                      Mount{
+                          target: Some(String::from("/shared")),
+                          source: Some(network_path),
+                          typ: Some(MountTypeEnum::VOLUME),
+                          ..Default::default()
+                      }]),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }
+        ).await.unwrap().id;
+
+        self.docker.start_container(container_id.as_str(), None::<StartContainerOptions<String>>).await.expect("Copy container not started");
+        self.docker.wait_container(container_id.as_str(), None::<WaitContainerOptions<String>>).try_next().await.expect("Didn't wait on container??");
+        // self.docker.remove_container(container_id.as_str(), Some(RemoveContainerOptions{ force: true, ..Default::default()})).await.expect("Remove container failed");
+        
+
         let create_options = CreateContainerOptions {
             name: container_name.as_str(),
             ..Default::default()
         };
 
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
         let image = env::var("ROCKET_XRPLD_DOCKER_CONTAINER").unwrap_or("xrpllabsofficial/xrpld:2.4.0".to_string());
 
         let container_config = bollard::container::Config {
@@ -363,8 +443,8 @@ impl DockerNetwork {
                 auto_remove: Some(true),
                 mounts: Some(vec![Mount {
                     target: Some(String::from("/config")),
-                    source: Some(format!("{}/network/{}/config", network_path, container_name.as_str() )),
-                    typ: Some(MountTypeEnum::BIND),
+                    source: Some(volume_name),
+                    typ: Some(MountTypeEnum::VOLUME),
                     ..Default::default()
                 }]),
                 ..Default::default()
@@ -460,10 +540,9 @@ impl DockerNetwork {
         hostname_prefix: &str,
     ) -> Vec<(String, ValidatorKeyData)> {
         // let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap_or(current_dir.to_str().unwrap().to_string());
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
 
-        let base_config_path = format!("{}/network/rippled_base.cfg", network_path);
-        let ledger_json_path = format!("{}/network/ledger.json", network_path);
+        let base_config_path = "/shared/network/rippled_base.cfg";
+        let ledger_json_path = "/shared/network/ledger.json";
         let base_config_file = fs::File::open(&base_config_path);
 
         let mut base_config_contents = String::new();
@@ -480,7 +559,7 @@ impl DockerNetwork {
                 .replace("{validation_seed}", key.validation_seed.as_str())
                 .replace("{hostname_prefix}", hostname_prefix);
 
-            let config_dir = format!("{}/network/{}/config",network_path , container_name.clone());
+            let config_dir = format!("/shared/network/{}/config" , container_name.clone());
             fs::create_dir_all(config_dir.as_str()).expect("Could not create directory.");
 
             let mut config_file =
@@ -515,12 +594,10 @@ impl DockerNetwork {
     fn generate_key_generator_config(
         &self,
         hostname_prefix: &str,
-    ){
-        let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
-        debug!("network_path: {}", network_path);
-        let base_config_path = format!("{}/network/key_generator/config/rippled.cfg", network_path);
+    ) {
+        let base_config_path = "/shared/network/key_generator/config/rippled.cfg";
 
-        let config_dir = format!("{}/network/{}_key_generator/config", network_path, hostname_prefix);
+        let config_dir = format!("/shared/network/{}_key_generator/config", hostname_prefix);
         fs::create_dir_all(config_dir.as_str()).expect("Could not create directory.");
 
         fs::copy(&base_config_path, format!("{}/rippled.cfg", config_dir)).unwrap();
