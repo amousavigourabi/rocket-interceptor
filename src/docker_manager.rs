@@ -14,7 +14,7 @@ use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use bollard::network::ConnectNetworkOptions;
 use bollard::service::EndpointSettings;
-use bollard::volume::CreateVolumeOptions;
+use bollard::volume::{CreateVolumeOptions, RemoveVolumeOptions};
 use crate::is_valid_unl_connection;
 use crate::packet_client::proto;
 use crate::packet_client::PacketClient;
@@ -208,6 +208,22 @@ impl DockerNetwork {
                 }
             }
         }
+        
+        let volumes_response = self.docker.list_volumes::<String>(None).await.expect("Could not fetch volumes");
+        if let Some(volumes) = volumes_response.volumes {
+            for volume in volumes {
+                let name = volume.name;
+                if name.starts_with(hostname_prefix) {
+                    match self.docker.remove_volume(&name, Some(RemoveVolumeOptions{force: true})).await {
+                        Ok(_) => {debug!("Removed volume {}", name)}
+                        Err(e) => {eprintln!("Failed to remove volume {}: {:?}", name, e)}
+                    }
+                }
+                
+            }
+        }
+        
+                
     }
 
     /// Loop over all containers in `self`, and poll them every 500ms, until
