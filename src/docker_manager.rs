@@ -265,56 +265,13 @@ impl DockerNetwork {
     async fn start_validator(&self, container: &mut DockerContainer) {
         let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
 
-        // self.docker.create_volume(CreateVolumeOptions {
-        //     name: volume_name.clone(),
-        //     ..Default::default()
-        // }).await.expect("Cannot create volume");
-
-        // let cp_command = format!("cp -r /shared/network/{}/config/* /config", container.name);
-        // let container_id = self.docker.create_container(
-        //     Some(CreateContainerOptions {
-        //         name: format!("{}_volume_copy", container.name.clone()),
-        //         ..Default::default()
-        //     }),
-        //     bollard::container::Config {
-        //         image: Some("alpine:latest"),
-        //         cmd: Some(vec!["sh", "-c", &cp_command]),
-        //         host_config: Some(HostConfig {
-        //             auto_remove: Some(true),
-        //             mounts: Some(vec![Mount {
-        //                 target: Some(String::from("/config")),
-        //                 source: Some(volume_name.clone()),
-        //                 typ: Some(MountTypeEnum::VOLUME),
-        //                 ..Default::default()
-        //             },
-        //             Mount{
-        //                 target: Some(String::from("/shared")),
-        //                 source: Some(network_path),
-        //                 typ: Some(MountTypeEnum::VOLUME),
-        //                 ..Default::default()
-        //             }]),
-        //             ..Default::default()
-        //         }),
-        //         ..Default::default()
-        //     }
-        // ).await.unwrap().id;
-
-        // self.docker.start_container(container_id.as_str(), None::<StartContainerOptions<String>>).await.expect("Copy container not started");
-        // self.docker.wait_container(container_id.as_str(), None::<WaitContainerOptions<String>>).try_next().await.expect("Didn't wait on container??");
-        // self.docker.remove_container(container_id.as_str(), Some(RemoveContainerOptions{ force: true, ..Default::default()})).await.expect("Stop container failed");
-
         let shared_mount = Mount {
             target: Some(String::from("/shared")),
             source: Some(network_path),
             typ: Some(MountTypeEnum::VOLUME),
             ..Default::default()
         };
-        // let config_mount = Mount {
-        //     target: Some(String::from("/config")),
-        //     source: Some(volume_name.clone()),
-        //     typ: Some(MountTypeEnum::VOLUME),
-        //     ..Default::default()
-        // };
+     
         let container_subcmd = format!("cp -r /shared/network/{}/config/* /config && exec /entrypoint.sh", container.name);
         let container_cmd = vec![
             container_subcmd.as_str()
@@ -404,46 +361,7 @@ impl DockerNetwork {
     async fn generate_keys(&self, n: u16, hostname_prefix: &str) -> Vec<ValidatorKeyData> {
         let container_name = format!("{}_key_generator", hostname_prefix);
 
-        // let volume_name = format!("{}_volume", container_name.clone());
         let network_path = env::var("ROCKET_NETWORK_MOUNT").unwrap();
-
-        // self.docker.create_volume(CreateVolumeOptions {
-        //     name: volume_name.clone(),
-        //     ..Default::default()
-        // }).await.expect("Cannot create volume");
-        // 
-        // let cp_command = format!("cp -r /shared/network/{}/config/* /config", container_name);
-        // let container_id = self.docker.create_container(
-        //     Some(CreateContainerOptions {
-        //         name: format!("{}_volume_copy", container_name.clone()),
-        //         ..Default::default()
-        //     }),
-        //     bollard::container::Config {
-        //         image: Some("alpine:latest"),
-        //         cmd: Some(vec!["sh", "-c", &cp_command]),
-        //         host_config: Some(HostConfig {
-        //             auto_remove: Some(true),
-        //             mounts: Some(vec![Mount {
-        //                 target: Some(String::from("/config")),
-        //                 source: Some(volume_name.clone()),
-        //                 typ: Some(MountTypeEnum::VOLUME),
-        //                 ..Default::default()
-        //             },
-        //               Mount{
-        //                   target: Some(String::from("/shared")),
-        //                   source: Some(network_path),
-        //                   typ: Some(MountTypeEnum::VOLUME),
-        //                   ..Default::default()
-        //               }]),
-        //             ..Default::default()
-        //         }),
-        //         ..Default::default()
-        //     }
-        // ).await.unwrap().id;
-        // 
-        // self.docker.start_container(container_id.as_str(), None::<StartContainerOptions<String>>).await.expect("Copy container not started");
-        // self.docker.wait_container(container_id.as_str(), None::<WaitContainerOptions<String>>).try_next().await.expect("Didn't wait on container??");
-        // self.docker.remove_container(container_id.as_str(), Some(RemoveContainerOptions{ force: true, ..Default::default()})).await.expect("Remove container failed");
         
         let shared_volume = Mount {
             target: Some(String::from("/shared")),
